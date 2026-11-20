@@ -89,6 +89,7 @@
     <button id="btn">开始游戏</button>
   </div>
   <button id="pauseBtn" class="hidden" style="position:absolute; top:26px; left:8px; z-index:4; padding:5px 12px; font-size:13px;">⏸</button>
+  <button id="dashBtn" class="hidden" style="position:absolute; bottom:14px; right:8px; z-index:4; padding:8px 14px; font-size:16px;">⚡</button>
   <div id="nav" class="hidden">
     <button id="navShop">🛒 商店</button>
     <button id="navPlay">▶ 开始战斗</button>
@@ -113,7 +114,7 @@ let DPR=1;
 })();
 const W=cv._lw, H=cv._lh;
 const WW=W*2, WH=H*2; // 世界是屏幕的2倍
-const ov=document.getElementById('overlay'), ovT=document.getElementById('ovTitle'), ovX=document.getElementById('ovText'), ch=document.getElementById('choices'), btn=document.getElementById('btn'), pauseBtn=document.getElementById('pauseBtn'), nav=document.getElementById('nav'), navShop=document.getElementById('navShop'), navPlay=document.getElementById('navPlay');
+const ov=document.getElementById('overlay'), ovT=document.getElementById('ovTitle'), ovX=document.getElementById('ovText'), ch=document.getElementById('choices'), btn=document.getElementById('btn'), pauseBtn=document.getElementById('pauseBtn'), nav=document.getElementById('nav'), navShop=document.getElementById('navShop'), navPlay=document.getElementById('navPlay'), dashBtn=document.getElementById('dashBtn');
 const hpEl=document.getElementById('hp'), tEl=document.getElementById('time'), xpEl=document.getElementById('xpbar'), xpNextEl=document.getElementById('xptext'), coinEl=document.getElementById('coin');
 const rand=(a,b)=>a+Math.random()*(b-a);
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -127,6 +128,8 @@ let SAVE;
 try{ SAVE=JSON.parse(localStorage.getItem('sv_save'))||JSON.parse(JSON.stringify(DEFAULT_SAVE)); }catch(e){ SAVE=JSON.parse(JSON.stringify(DEFAULT_SAVE)); }
 SAVE.up=Object.assign({dmg:0,hp:0,spd:0,rate:0},SAVE.up);
 SAVE.defense=SAVE.defense||{};
+if(!SAVE.char) SAVE.char='warrior';   // 角色：warrior/scholar/merchant/engineer
+if(!SAVE.weapon) SAVE.weapon='gun';   // 武器：gun/rocket/blade
 function persist(){ try{ localStorage.setItem('sv_save',JSON.stringify(SAVE)); }catch(e){} }
 if(SAVE.sound===undefined) SAVE.sound=true;
 // ---- 新手教程状态：0=未开始 1=去商店买血量 2=布防放两个机枪 3=完成 ----
@@ -326,8 +329,15 @@ let defSel='turret';
 const UPGRADES=[
  {id:'dmg', ic:'⚔️', nm:'利刃', ds:'伤害 +25%', max:8},
  {id:'rate', ic:'⚡', nm:'迅捷', ds:'攻速 +25%', max:8},
- {id:'multi', ic:'🔱', nm:'多重弹', ds:'子弹数 +1', max:4},
+ {id:'multi', ic:'🔱', nm:'多重弹', ds:'手枪专属：子弹数 +1（3发一排接力齐射）', max:4, w:'gun'},
+ {id:'rktr', ic:'🚀', nm:'火箭增爆', ds:'火箭筒专属：爆炸范围 +15%（满级+75%）', max:5, w:'rocket'},
+ {id:'blr', ic:'🗡️', nm:'刀刃扩展', ds:'砍刀专属：挥砍弧度扩大、最远距离 +5%/级（满级覆盖75%圆）', max:5, w:'blade'},
  {id:'pierce', ic:'🎯', nm:'穿透', ds:'子弹穿透 +1', max:4},
+ {id:'homing', ic:'🧿', nm:'追踪弹', ds:'子弹会转向追踪敌人', max:3},
+ {id:'blast', ic:'🧨', nm:'爆破弹', ds:'命中后爆炸，溅射周围敌人', max:3},
+ {id:'shield', ic:'🔵', nm:'能量护盾', ds:'周期性自动抵挡一次伤害', max:3},
+ {id:'thorn', ic:'🌵', nm:'荆棘领域', ds:'身边敌人持续受到伤害', max:3},
+ {id:'wind', ic:'🌪️', nm:'疾影', ds:'冲刺冷却 -20%', max:3},
  {id:'spd', ic:'👟', nm:'疾风步', ds:'移速 +20%（满级 100%）', max:5},
  {id:'hp', ic:'❤️', nm:'坚韧', ds:'最大生命 +2，并回满', max:6},
  {id:'magnet', ic:'🧲', nm:'磁力', ds:'拾取范围 +40%', max:5},
@@ -343,11 +353,12 @@ const UPGRADES=[
 function startGame(){
   const mul=[1,1.6,2.4,3.2,4.2][selLevel-1]; // 关卡难度从1开始
   S={t:0, test:!!testBoss, kills:0, level:selLevel, mul:mul, coinsRun:0, coins:[], ebullets:[], spawnTimer:1,
-     px:W/2, py:H/2, x:W/2, y:H/2, camx:0, camy:0, moving:0, hp:10+SAVE.up.hp, maxhp:10+SAVE.up.hp, lvl:1, xp:0, xpNext:6,
-     keys:{dmg:0,rate:0,multi:0,pierce:0,spd:0,hp:0,magnet:0,orbit:0,nova:0,regen:0,crit:0,xp:0,tdmg:0,trate:0},
+     px:W/2, py:H/2, x:W/2, y:H/2, camx:0, camy:0, moving:0, hp:10+SAVE.up.hp-(SAVE.char==='merchant'?2:0), maxhp:10+SAVE.up.hp-(SAVE.char==='merchant'?2:0), lvl:1, xp:0, xpNext:6,
+     keys:{dmg:0,rate:0,multi:0,pierce:0,spd:0,hp:0,magnet:0,orbit:0,nova:0,regen:0,crit:0,xp:0,tdmg:0,trate:0,homing:0,blast:0,shield:0,thorn:0,wind:0},
+     dashCd:0, dashing:0, dashInv:0, dashA:0, shieldT:0, thornT:0, volleyPending:0, volleyT:0, skillCd:0, uberT:0,
      bullets:[], enemies:[], gems:[], parts:[], novaT:0, orbitA:0, fireT:0.6, hurtT:0,
      bossCount:0, bossSpawnAt:0, paused:false, dnums:[], nextBossAt:120, over:false, choosing:false, revived:false, texts:[], aimA:0, walkT:0, defs:(SAVE.defense[selLevel]||[]).map(d=>({id:d.id,x:d.x,y:d.y,cd:0,ang:0})), runDmg:1, airDone:false};
-   ov.classList.add('hidden'); ov.classList.remove('menu'); ch.innerHTML=''; pauseBtn.classList.remove('hidden');
+     ov.classList.add('hidden'); ov.classList.remove('menu'); ch.innerHTML=''; pauseBtn.classList.remove('hidden'); dashBtn.classList.remove('hidden');
    cancelAnimationFrame(raf);
    Spot.hide(); // 进入战斗，清除所有引导
    AudioSys.startMusic(false);
@@ -428,10 +439,39 @@ function spawnBossChild(x,y,gen,maxhp,e){
 }
 
 // ---------- combat ----------
-function playerDmg(){ return (1+0.01*SAVE.up.dmg)*(1+0.25*S.keys.dmg)*(S.runDmg||1); }
+function playerDmg(){ return (1+0.01*SAVE.up.dmg)*(1+0.25*S.keys.dmg)*(S.runDmg||1)*(SAVE.char==='scholar'?0.9:SAVE.char==='engineer'?0.85:1); }
 function fireRate(){ return 1.4*(1+0.01*SAVE.up.rate)*(1+0.25*S.keys.rate); }
+function weaponFireMul(){ return SAVE.weapon==='rocket'?0.55:SAVE.weapon==='blade'?1.6:1; } // 火箭筒更慢/砍刀更快
 function fire(){
-  const n=1+S.keys.multi;
+  if(SAVE.weapon==='blade'){ fireBlade(); return; }
+  const n=(SAVE.weapon==='gun')?(1+S.keys.multi):1;
+  const k1=Math.min(3,n);
+  launchVolley(k1); // 第一排：一次最多3发扇形
+  if(n>k1){ S.volleyPending=n-k1; S.volleyT=0.28; } // 第二排接力：等第一排出手后再射
+}
+function fireBlade(){ // 砍刀：近距离扇形挥砍，群伤1，攻速快
+  let tgt=null,best=1e9;
+  for(const e of S.enemies){ if(e.dead)continue;
+    if(e.x<S.camx-40||e.x>S.camx+W+40||e.y<S.camy-40||e.y>S.camy+H+40) continue;
+    const d=dist(e,S); if(d<best){best=d;tgt=e;} }
+  if(!tgt) return;
+  const lvl=S.keys.blr||0;
+  const R=70*(1+0.05*lvl), arc=Math.PI/2+Math.PI*0.2*lvl; // 90°起，每级+36°，5级=270°(75%圆)
+  const a0=Math.atan2(tgt.y-S.py,tgt.x-S.px);
+  S.aimA=a0; S.faceA=a0;
+  let hit=false;
+  for(const e of S.enemies){ if(e.dead)continue;
+    const d=dist(e,S); if(d>R+e.r*0.5)continue;
+    let df=Math.atan2(e.y-S.py,e.x-S.px)-a0;
+    while(df>Math.PI)df-=2*Math.PI; while(df<-Math.PI)df+=2*Math.PI;
+    if(Math.abs(df)<=arc/2+ (e.r/Math.max(40,d)) ){ e.hp-=1; e.hitT=0.1; hitFx(e);
+      S.dnums.push({x:e.x+rand(-4,4),y:e.y-e.r-4,v:1,crit:false,life:0.7,vy:-40});
+      if(e.hp<=0) killEnemy(e); hit=true; } }
+  if(hit){ AudioSys.sfx('hit'); S.shake=Math.max(S.shake||0,2); }
+  S.parts.push({slash:true,x:S.px,y:S.py,a:a0,r:R,arc,life:0.16,maxlife:0.16});
+}
+function launchVolley(m){
+  const isR=SAVE.weapon==='rocket';
   let tgt=null, best=1e9;
   for(const e of S.enemies){
     if(e.x<S.camx-40||e.x>S.camx+W+40||e.y<S.camy-40||e.y>S.camy+H+40) continue; // 不打屏外
@@ -441,13 +481,30 @@ function fire(){
   AudioSys.sfx('shoot');
   const base=Math.atan2(tgt.y-S.py, tgt.x-S.px);
   S.aimA=base;
-  const spread=n>1?0.2:0;
-  for(let i=0;i<n;i++){
-    const a=base+(i-(n-1)/2)*spread;
-    S.bullets.push({x:S.px+Math.cos(S.aimA)*10,y:S.py-2+Math.sin(S.aimA)*10,vx:Math.cos(a)*420,vy:Math.sin(a)*380,life:1.6,pierce:S.keys.pierce,hitset:new Set()});
+  const spread=m>1?0.2:0, sp=isR?280:420;
+  for(let i=0;i<m;i++){
+    const a=base+(i-(m-1)/2)*spread;
+    S.bullets.push({x:S.px+Math.cos(S.aimA)*10,y:S.py-2+Math.sin(S.aimA)*10,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:isR?2.2:1.6,pierce:isR?0:S.keys.pierce,rocket:isR,hitset:new Set(),dmg0:isR?playerDmg()*2.2:undefined});
   }
   // muzzle flash
-  S.parts.push({x:S.px+Math.cos(S.aimA)*14, y:S.py-2+Math.sin(S.aimA)*14, vx:0, vy:0, life:0.08, color:'#fff6c8', r:5});
+  S.parts.push({x:S.px+Math.cos(S.aimA)*14, y:S.py-2+Math.sin(S.aimA)*14, vx:0, vy:0, life:0.08, color:isR?'#ffb428':'#fff6c8', r:isR?7:5});
+}
+function charSkill(){ // 角色主动技能：勇士=冲刺 学者=专注 商人=召唤商店 工程师=临时炮台
+  if(!S||S.over||S.paused||S.choosing) return;
+  if(S.skillCd>0) return;
+  const c=SAVE.char||'warrior';
+  if(c==='scholar'){ S.uberT=6; S.skillCd=15; S.texts.push({txt:'📖 专注！6秒必定暴击！',life:1.5}); AudioSys.sfx('lvl'); }
+  else if(c==='merchant'){ S.skillCd=120; openAirshop(); }
+  else if(c==='engineer'){ S.defs.push({id:'turret',x:S.px,y:S.py,cd:0,ang:0,temp:true,life:15}); S.skillCd=45; S.texts.push({txt:'🔧 临时炮台部署！',life:1.5}); AudioSys.sfx('coin'); }
+  else { if(S.dashCd>0||S.dashing>0) return;
+    S.dashing=0.16; S.dashInv=0.32; S.dashA=S.faceA||0;
+    S.skillCd=5*(1-0.2*S.keys.wind); }
+}
+function dash(){ /* 已并入 charSkill（勇士主动技能） */ }
+function hurtHero(d){
+  if(S.dashInv>0) return false; // 冲刺无敌帧
+  if(S.keys.shield&&S.shieldT<=0){ S.shieldT=20-3*S.keys.shield; S.texts.push({txt:'🔵 护盾抵挡！',life:1}); AudioSys.sfx('hurt'); return false; }
+  S.hp-=d; S.hurtT=0.05; S.redT=0.2; AudioSys.sfx('hurt'); return true;
 }
 function doNova(){
   const R=90+30*S.keys.nova, dmg=playerDmg()*2;
@@ -472,7 +529,7 @@ function killEnemy(e){
   const n=e.type==='boss'?10:e.type==='elite'?3:e.type==='tank'?2:1;
   for(let i=0;i<n;i++) S.gems.push({x:e.x+rand(-12,12),y:e.y+rand(-12,12),v:e.type==='boss'?5:e.type==='elite'?3:e.type==='tank'?2:1,ph:Math.random()*6});
   // 金币掉落 45%
-  if(Math.random()<0.45){
+  if(Math.random()<(SAVE.char==='merchant'?0.65:0.45)){
     const cv2=e.type==='boss'?5:e.type==='elite'?3:1;
     S.coins.push({x:e.x,y:e.y,v:cv2,ph:Math.random()*6});
   }
@@ -495,12 +552,14 @@ function hitFx(e){ for(let i=0;i<3;i++) S.parts.push({x:e.x,y:e.y,vx:rand(-60,60
 
 // ---------- leveling ----------
 function gainXP(v){
-  S.xp+=v*(1+0.25*S.keys.xp);
+  S.xp+=v*(1+0.25*S.keys.xp)*(SAVE.char==='scholar'?1.3:1);
   while(S.xp>=S.xpNext){ S.xp-=S.xpNext; S.lvl++; S.xpNext=Math.floor(6*Math.pow(1.35,S.lvl-1)); levelUp(); }
 }
 function levelUp(){
   AudioSys.sfx('lvl');
-  const avail=UPGRADES.filter(u=>S.keys[u.id]<u.max && (u.id!=='tdmg'&&u.id!=='trate' || S.defs.some(d=>d.id==='turret')));
+  const wsel=SAVE.weapon||'gun';
+  let avail=UPGRADES.filter(u=>S.keys[u.id]<u.max && (!u.w||u.w===wsel) && (u.id!=='tdmg'&&u.id!=='trate' || S.defs.some(d=>d.id==='turret')));
+  if(SAVE.char==='engineer'){ const t1=avail.find(u=>u.id==='tdmg'), t2=avail.find(u=>u.id==='trate'); if(t1)avail.push(t1); if(t2)avail.push(t2); } // 工程师：机枪卡牌概率增高
   const picks=[];
   while(picks.length<3&&avail.length) picks.push(avail.splice(Math.random()*avail.length|0,1)[0]);
   S.choosing=true;
@@ -558,7 +617,7 @@ function quitToMenu(){
 }
 // ---------- input ----------
 addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;
-  if(e.key===' '){if(!S||S.over)startLevel(); e.preventDefault();}
+  if(e.key===' '){if(!S||S.over)startLevel(); else charSkill(); e.preventDefault();}
   if((e.key==='Escape'||e.key==='p')&&S&&!S.over&&!S.choosing) togglePause();
 });
 addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
@@ -594,8 +653,9 @@ function update(dt){
   if(keys['w']||keys['arrowup'])dy--; if(keys['s']||keys['arrowdown'])dy++;
   if(keys['a']||keys['arrowleft'])dx--; if(keys['d']||keys['arrowright'])dx++;
   if(joy&&(Math.abs(joy.dx)>5||Math.abs(joy.dy)>5)){ dx=joy.dx; dy=joy.dy; } // 摇杆方向=基点偏移，模拟量控制
+  if(S.dashing>0){ dx=0; dy=0; } // 冲刺期间接管移动
   const l=Math.hypot(dx,dy)||1;
-  const spd=115*(1+0.01*SAVE.up.spd)*(1+0.2*S.keys.spd);
+  const spd=115*(1+0.01*SAVE.up.spd)*(1+0.2*S.keys.spd)*(SAVE.char==='scholar'?0.9:1);
   S.px=Math.max(14,Math.min(WW-14,S.px+dx/l*spd*dt));
   S.py=Math.max(14,Math.min(WH-14,S.py+dy/l*spd*dt));
   S.moving=(dx||dy)?1:0;
@@ -606,19 +666,45 @@ function update(dt){
 
   // auto fire
   S.fireT+=dt;
-  if(S.fireT>=1/fireRate()){ S.fireT=0; fire(); }
+  if(S.fireT>=1/(fireRate()*weaponFireMul())){ S.fireT=0; fire(); }
 
   if(S.keys.orbit) S.orbitA+=dt*2.2;
   if(S.keys.nova){ S.novaT+=dt; if(S.novaT>=3.2-S.keys.nova*0.5){S.novaT=0; doNova();} }
+  // ---- 多重弹第二排接力 ----
+  if(S.volleyPending>0){ S.volleyT-=dt; if(S.volleyT<=0){ launchVolley(S.volleyPending); S.volleyPending=0; } }
+  // ---- 荆棘领域：身边持续伤害 ----
+  if(S.keys.thorn){ S.thornT-=dt;
+    if(S.thornT<=0){ S.thornT=0.5; const tr=55+13*S.keys.thorn, td=playerDmg()*0.18*S.keys.thorn;
+      for(const e of S.enemies){ if(e.dead)continue; if(dist(e,S)<tr){ e.hp-=td; e.hitT=0.06; if(e.hp<=0) killEnemy(e); } }
+      S.parts.push({ring:true,x:S.px,y:S.py,r:tr*0.6,max:tr,life:0.35,maxlife:0.35,color:'#8fe08f'}); } }
+  // ---- 护盾冷却 ----
+  S.shieldT-=dt;
+  // ---- 主动技能：冲刺 ----
+  S.dashCd-=dt; S.dashInv-=dt;
+  S.skillCd=Math.max(0,S.skillCd-dt); S.uberT=Math.max(0,S.uberT-dt); // 角色技能冷却/学者专注
+  if(S.dashing>0){ S.dashing-=dt;
+    S.px=Math.max(14,Math.min(WW-14,S.px+Math.cos(S.dashA)*560*dt));
+    S.py=Math.max(14,Math.min(WH-14,S.py+Math.sin(S.dashA)*560*dt));
+    S.moving=1;
+    S.parts.push({x:S.px,y:S.py,vx:rand(-20,20),vy:rand(-20,20),life:0.3,color:'#9fe8f5',r:5});
+  }
 
   // bullets
   for(const b of S.bullets){
+    if(S.keys.homing){ // 追踪弹：按等级转向最近的敌人
+      let tt=null, bd=300;
+      for(const e of S.enemies){ if(e.dead)continue; const d2=dist(b,e); if(d2<bd){bd=d2;tt=e;} }
+      if(tt){ const cur=Math.atan2(b.vy,b.vx), ta=Math.atan2(tt.y-b.y,tt.x-b.x);
+        let df=ta-cur; while(df>Math.PI)df-=2*Math.PI; while(df<-Math.PI)df+=2*Math.PI;
+        const turn=Math.min(Math.abs(df),(2.2+1.1*S.keys.homing)*dt), na=cur+Math.sign(df)*turn, sp=Math.hypot(b.vx,b.vy);
+        b.vx=Math.cos(na)*sp; b.vy=Math.sin(na)*sp; }
+    }
     b.x+=b.vx*dt; b.y+=b.vy*dt; b.life-=dt;
     if(b.x<-20||b.x>WW+20||b.y<-20||b.y>WH+20) b.dead=true;
     for(const e of S.enemies){
       if(e.dead||b.hitset.has(e))continue;
       if(dist(b,e)<e.r+4){
-        const crit=Math.random()<0.13*S.keys.crit;
+        const crit=Math.random()<0.13*S.keys.crit || S.uberT>0;
         const base=b.dmg0!=null?b.dmg0:playerDmg()*(b.mul||1);
         const dnum=Math.round(base*(crit?2:1)*10)/10;
         AudioSys.sfx('hit');
@@ -629,8 +715,16 @@ function update(dt){
         e.x+=Math.cos(a2)*kb; e.y+=Math.sin(a2)*kb;
         S.shake=Math.max(S.shake||0,2.5);
         hitFx(e);
+        if((b.rocket||S.keys.blast)&&!b._ex){ // 爆破弹/火箭筒：命中爆炸，溅射周围
+          b._ex=true; const lvlR=b.rocket?(S.keys.rktr||0):(S.keys.blast||0);
+          const br=b.rocket?40*(1+0.15*lvlR):30+12*lvlR, bd2=playerDmg()*(b.rocket?0.8:(0.5+0.25*lvlR));
+          S.parts.push({ring:true,x:e.x,y:e.y,r:0,max:br,life:0.25,maxlife:0.25});
+          S.shake=Math.max(S.shake||0,4);
+          for(const o of S.enemies){ if(o.dead||o===e)continue; if(dist(o,e)<br){ o.hp-=bd2; o.hitT=0.1; hitFx(o); if(o.hp<=0) killEnemy(o); } }
+          b.dead=true;
+        }
         b.hitset.add(e);
-        if(--b.pierce<0) b.dead=true;
+        if(!b.dead&&--b.pierce<0) b.dead=true;
         if(e.hp<=0) killEnemy(e);
         break;
       }
@@ -652,7 +746,7 @@ function update(dt){
         S.parts.push({x:e.x+Math.cos(a)*12,y:e.y+Math.sin(a)*12,vx:0,vy:0,life:0.1,color:'#9fe8f5',r:4});
       }
       e.hitT=Math.max(0,e.hitT-dt); e.slowT=Math.max(0,(e.slowT||0)-dt);
-      if(dd<e.r+9 && S.hurtT<=0){ S.hp-=e.dmg; S.hurtT=0.05; S.redT=0.2; AudioSys.sfx('hurt'); if(S.hp<=0){ gameOver(); return; } }
+      if(dd<e.r+9 && S.hurtT<=0){ if(hurtHero(e.dmg)&&S.hp<=0){ gameOver(); return; } }
       continue;
     }
     // ---- 治疗师：后方游走，周期性给同伴回血 ----
@@ -666,7 +760,7 @@ function update(dt){
         if(healed) S.parts.push({ring:true,x:e.x,y:e.y,r:0,max:130,life:0.5,maxlife:0.5,color:'#ff9fd0'});
       }
       e.hitT=Math.max(0,e.hitT-dt); e.slowT=Math.max(0,(e.slowT||0)-dt);
-      if(dd<e.r+9 && S.hurtT<=0){ S.hp-=e.dmg; S.hurtT=0.05; S.redT=0.2; AudioSys.sfx('hurt'); if(S.hp<=0){ gameOver(); return; } }
+      if(dd<e.r+9 && S.hurtT<=0){ if(hurtHero(e.dmg)&&S.hp<=0){ gameOver(); return; } }
       continue;
     }
     // 惩罚者弹幕
@@ -702,8 +796,8 @@ function update(dt){
         e.x=Math.max(30,Math.min(WW-30,e.x)); e.y=Math.max(30,Math.min(WH-30,e.y));
         e.hitT=0.05;
         if(Math.hypot(e.x-S.px,e.y-S.py)<e.r+9 && S.hurtT<=0){
-          S.hp-=e.dmg; S.hurtT=0.05; S.redT=0.2; S.shake=Math.max(S.shake,5);
-          if(S.hp<=0){ gameOver(); return; }
+          if(hurtHero(e.dmg)){ S.shake=Math.max(S.shake,5);
+          if(S.hp<=0){ gameOver(); return; } }
         }
         continue; // 冲刺时不受常规移动影响
       }
@@ -723,10 +817,8 @@ function update(dt){
     e.y+=(S.py-e.y)/d*es*dt;
     e.hitT=Math.max(0,e.hitT-dt);
     e.slowT=Math.max(0,(e.slowT||0)-dt);
-    if(d<e.r+9 && S.hurtT<=0){
-      S.hp-=e.dmg;
-      S.hurtT=0.05; S.redT=0.2; S.shake=Math.max(S.shake||0,4);
-      AudioSys.sfx('hurt');
+    if(d<e.r+9 && S.hurtT<=0 && hurtHero(e.dmg)){
+      S.shake=Math.max(S.shake||0,4);
       const a3=Math.atan2(e.y-S.py,e.x-S.px);
       e.x+=Math.cos(a3)*18; e.y+=Math.sin(a3)*18; // 怪物被击退
       if(S.hp<=0){ gameOver(); return; }
@@ -766,19 +858,20 @@ function update(dt){
 
   // \u5e03\u9632\u9053\u5177
   for(const dfn of S.defs){
+    if(dfn.temp){ dfn.life-=dt; } // 工程师临时炮台倒计时
     if(dfn.id==='turret'){
       dfn.cd-=dt;
       if(dfn.cd<=0){
         let tgt=null,bd=280;
         for(const e of S.enemies){ const dd=dist(e,dfn); if(dd<bd){bd=dd;tgt=e;} }
         if(tgt){ dfn.ang=Math.atan2(tgt.y-dfn.y,tgt.x-dfn.x);
-          S.bullets.push({x:dfn.x,y:dfn.y,vx:Math.cos(dfn.ang)*420,vy:Math.sin(dfn.ang)*420,life:1.2,pierce:0,hitset:new Set(),dmg0:0.5*(1+0.5*S.keys.tdmg)});
-          dfn.cd=0.8/(1+0.2*S.keys.trate); }
+          const tDmg=dfn.temp?1:(0.5*(1+0.5*S.keys.tdmg))*(SAVE.char==='engineer'?1.45:1); // 临时炮台固定伤害1；工程师布防炮台+45%
+          S.bullets.push({x:dfn.x,y:dfn.y,vx:Math.cos(dfn.ang)*420,vy:Math.sin(dfn.ang)*420,life:1.2,pierce:0,hitset:new Set(),dmg0:tDmg});
+          dfn.cd=0.8/(1+0.2*S.keys.trate)/(dfn.temp?2:1)/((SAVE.char==='engineer'&&!dfn.temp)?1.3:1); }
       }
     } else if(dfn.id==='spike'){
       dfn.cd-=dt;
-      if(dfn.cd<=0){ let hitAny=false;
-        for(const e of S.enemies){ if(dist(e,dfn)<120){ e.hp-=playerDmg()*0.35; e.hitT=0.1; hitFx(e); S.dnums.push({x:e.x+rand(-4,4),y:e.y-e.r-4,v:Math.round(playerDmg()*0.35*10)/10,crit:false,life:0.7,vy:-40}); if(e.hp<=0)killEnemy(e); hitAny=true; } }
+      if(dfn.cd<=0){ let hitAny=false;        for(const e of S.enemies){ if(dist(e,dfn)<120){ e.hp-=playerDmg()*0.35; e.hitT=0.1; hitFx(e); S.dnums.push({x:e.x+rand(-4,4),y:e.y-e.r-4,v:Math.round(playerDmg()*0.35*10)/10,crit:false,life:0.7,vy:-40}); if(e.hp<=0)killEnemy(e); hitAny=true; } }
         if(hitAny) S.parts.push({ring:true,x:dfn.x,y:dfn.y,r:0,max:120,life:0.25,maxlife:0.25});
         dfn.cd=0.5; }
     } else if(dfn.id==='totem'){
@@ -788,6 +881,7 @@ function update(dt){
       for(const e of S.enemies){ if(dist(e,dfn)<150) e.slowT=0.35; }
     }
   }
+  S.defs=S.defs.filter(d=>!(d.temp&&d.life<=0)); // 工程师临时炮台到期拆除
   // gems
   const mag=60*(1+0.4*S.keys.magnet);
   for(const g of S.gems){
@@ -801,7 +895,7 @@ function update(dt){
     b.x+=b.vx*dt; b.y+=b.vy*dt; b.life-=dt;
     if(b.life<=0||b.x<-30||b.x>WW+30||b.y<-30||b.y>WH+30){b.dead=true;continue;}
     if(Math.hypot(b.x-S.px,b.y-S.py)<12 && S.hurtT<=0){
-      S.hp-=b.dmg; S.hurtT=0.05; S.redT=0.2; S.shake=Math.max(S.shake,3);
+      if(hurtHero(b.dmg)) S.shake=Math.max(S.shake,3);
       b.dead=true;
       if(S.hp<=0){ gameOver(); return; }
     }
@@ -854,6 +948,7 @@ function update(dt){
 
   // HUD
   hpEl.textContent=Math.max(0,Math.ceil(S.hp))+'/'+S.maxhp;
+  dashBtn.textContent=(SAVE.char==='scholar'?'📖':SAVE.char==='merchant'?'🛒':SAVE.char==='engineer'?'🔧':'⚡')+(S.skillCd>0?Math.ceil(S.skillCd):''); dashBtn.style.opacity=S.skillCd>0?0.55:1; // 角色技能冷却显示
   coinEl.textContent=SAVE.coins+S.coinsRun;
   const m=Math.floor(S.t/60), s=Math.floor(S.t%60);
   tEl.textContent=m+':'+String(s).padStart(2,'0');
@@ -906,7 +1001,7 @@ function openAirshop(){
   ov.classList.remove('hidden');
 }
 function gameOver(){
-  S.over=true; pauseBtn.classList.add('hidden');
+  S.over=true; pauseBtn.classList.add('hidden'); dashBtn.classList.add('hidden');
   AudioSys.stopMusic();
   // ---- 复活广告点：每局一次，死亡瞬间出现（最强广告场景） ----
   if(!S.revived){
@@ -929,7 +1024,7 @@ function doRevive(){
   // 复活时把主角身边的怪推开一圈，给玩家喘息
   for(const e of S.enemies){ if(e.type!=='boss'){ const a=Math.atan2(e.y-S.py,e.x-S.px); const d=Math.hypot(e.x-S.px,e.y-S.py)||1; const push=Math.max(0,220-d); e.x+=Math.cos(a)*push; e.y+=Math.sin(a)*push; } }
   S.texts.push({txt:'✨ 复活！继续战斗！', life:2});
-  ch.innerHTML=''; ov.classList.add('hidden'); ov.classList.remove('menu'); pauseBtn.classList.remove('hidden'); // 恢复暂停按钮（Bug3）
+  ch.innerHTML=''; ov.classList.add('hidden'); ov.classList.remove('menu'); pauseBtn.classList.remove('hidden'); dashBtn.classList.remove('hidden'); // 恢复暂停/冲刺按钮（Bug3）
   AudioSys.startMusic(false);
   loop();
 }
@@ -1168,12 +1263,20 @@ function draw(){
   }
   for(const b of S.bullets){
     ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(Math.atan2(b.vy,b.vx));
-    ctx.fillStyle='#ffe27a'; ctx.fillRect(-5,-2,10,4);
-    ctx.fillStyle='#fff'; ctx.fillRect(1,-1.5,4,3);
+    if(b.rocket){ ctx.fillStyle='#ffb428'; ctx.beginPath(); ctx.arc(0,0,6,0,7); ctx.fill();
+      ctx.fillStyle='#ffe27a'; ctx.fillRect(-12,-2,8,4); }
+    else { ctx.fillStyle='#ffe27a'; ctx.fillRect(-5,-2,10,4);
+    ctx.fillStyle='#fff'; ctx.fillRect(1,-1.5,4,3); }
     ctx.restore();
   }
   for(const p of S.parts){
-    if(p.ring){ const c2=p.color||'#ffd76a', a2=Math.max(0,p.life/p.maxlife);
+    if(p.slash){ const a2=Math.max(0,p.life/p.maxlife); // 砍刀挥砍弧光
+      ctx.strokeStyle='rgba(255,233,184,'+(a2*0.9).toFixed(2)+')'; ctx.lineWidth=10; ctx.lineCap='round';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,p.a-p.arc/2,p.a+p.arc/2); ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,'+(a2*0.6).toFixed(2)+')'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r*0.92,p.a-p.arc/2,p.a+p.arc/2); ctx.stroke();
+      ctx.lineWidth=1; ctx.lineCap='butt'; }
+    else if(p.ring){ const c2=p.color||'#ffd76a', a2=Math.max(0,p.life/p.maxlife);
       ctx.strokeStyle='rgba('+parseInt(c2.slice(1,3),16)+','+parseInt(c2.slice(3,5),16)+','+parseInt(c2.slice(5,7),16)+','+a2+')';
       ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.stroke(); }
     else { ctx.globalAlpha=Math.max(0,p.life/0.45); ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); ctx.globalAlpha=1; }
@@ -1269,7 +1372,7 @@ const PAGES={
     title:'选择关卡',
     text:()=>'金币：<b>'+SAVE.coins+'</b> · 难度逐关提升 · 点选关卡后先布防',
     nav:{shop:'🛒 商店', play:'🛠 布防', playGo:'defend'},
-    render(){ renderLevelList(); }
+    render(){ pickRows(); renderLevelList(); }
   },
   defend:{
     title:()=>'🛠 战前布防 · 第'+selLevel+'关',
@@ -1295,7 +1398,7 @@ function showPage(name){
   ovX.innerHTML=P.text();
   ch.innerHTML='';
   P.render();
-  btn.classList.add('hidden'); pauseBtn.classList.add('hidden');
+  btn.classList.add('hidden'); pauseBtn.classList.add('hidden'); dashBtn.classList.add('hidden');
   ov.classList.add('menu'); ov.classList.remove('hidden');
   nav.classList.remove('hidden');
   navShop.textContent=P.nav.shop;
@@ -1346,6 +1449,25 @@ function showHomeLevels(){
     list.appendChild(b);
   }
   ch.appendChild(list);
+}
+function pickRows(){ // 选关页顶部：角色 / 武器选择
+  const wrap=document.createElement('div'); wrap.id='pickrows';
+  const mk=(label,items,key)=>{
+    const lab=document.createElement('p'); lab.innerHTML='<b style="color:#ffd76a">'+label+'</b>';
+    lab.style.cssText='margin:6px 0 0;font-size:12px;text-align:center;'; wrap.appendChild(lab);
+    const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;flex-wrap:wrap;justify-content:center;';
+    items.forEach(it=>{
+      const b=document.createElement('button');
+      b.textContent=it.ic+' '+it.nm+(SAVE[key]===it.id?' ✅':'');
+      b.style.cssText='font-size:12px;padding:6px 10px;'+(SAVE[key]===it.id?'border:2px solid #ffd76a;background:#3a2f14;':'');
+      if(SAVE.tut===2){ b.className='tutdim'; }
+      b.onclick=()=>{ SAVE[key]=it.id; persist(); showPage('select'); };
+      row.appendChild(b); });
+    wrap.appendChild(row);
+  };
+  mk('👤 角色',[{id:'warrior',nm:'勇士',ic:'⚔️'},{id:'scholar',nm:'学者',ic:'📖'},{id:'merchant',nm:'商人',ic:'💰'},{id:'engineer',nm:'工程师',ic:'🔧'}],'char');
+  mk('🔫 武器',[{id:'gun',nm:'手枪',ic:'🔫'},{id:'rocket',nm:'火箭筒',ic:'🚀'},{id:'blade',nm:'砍刀',ic:'🗡️'}],'weapon');
+  ch.appendChild(wrap);
 }
 function renderLevelList(){
   const list=document.createElement('div'); list.id='lvlist';
@@ -1478,7 +1600,7 @@ function startLevel(){ testBoss=null; nav.classList.add('hidden'); startGame(); 
 function startTest(){ nav.classList.add('hidden'); startGame(); }
 function levelComplete(){
   if(!S) return; // Boss死亡后的延迟回调时可能已退出，防崩溃
-  S.over=true; pauseBtn.classList.add('hidden');
+  S.over=true; pauseBtn.classList.add('hidden'); dashBtn.classList.add('hidden');
   AudioSys.stopMusic();
   if(S.test){ // 测试模式不计奖励不解锁
     ovT.textContent='✅ Boss测试完成';
@@ -1503,6 +1625,7 @@ showPage('home');
 
 // ---- 声音开关按钮（右上角） ----
 const sndBtn=document.createElement('button');
+dashBtn.onclick=charSkill; // 角色主动技能（手机按钮/空格）
 sndBtn.style.cssText='position:absolute; top:26px; right:8px; z-index:4; padding:5px 12px; font-size:13px; letter-spacing:0; background:linear-gradient(180deg,#3a5a9e,#27406e); color:#cfe0ff; box-shadow:0 3px 0 #16244a;';
 sndBtn.textContent=SAVE.sound===false?'🔇':'🔊';
 sndBtn.onclick=()=>{ SAVE.sound=(SAVE.sound===false); persist(); sndBtn.textContent=SAVE.sound?'🔊':'🔇';
