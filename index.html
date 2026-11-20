@@ -7,22 +7,23 @@
 <style>
   :root{ --fg:#eef2ff; --muted:#9fb0d0; --accent:#ffb428; --gold1:#ffe27a; --gold2:#f7a916; --panel:#1b2a4a; --panel2:#24365e; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none;}
-  html,body{margin:0; background:transparent; font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color:var(--fg);}
-  #wrap{max-width:860px; margin:0 auto; position:relative;}
-  canvas{display:block; width:100%; border-radius:14px; touch-action:none; background:#1a2332;}
+  html,body{margin:0; background:#0d1526; font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color:var(--fg); min-height:100dvh;}
+  body{display:flex; align-items:center; justify-content:center;}
+  #wrap{width:100%; max-width:860px; margin:0 auto; position:relative;}
+  canvas{display:block; width:auto; height:auto; max-width:100%; max-height:100dvh; margin:0 auto; border-radius:14px; touch-action:none; background:#1a2332;}
   /* ---- HUD: 圆角胶囊 ---- */
-  #ui{position:absolute; top:10px; left:10px; right:10px; padding:0; pointer-events:none; display:flex; justify-content:space-between; gap:8px; font-size:13px;}
+  #ui{position:absolute; top:10px; left:10px; right:10px; padding:0; pointer-events:none; display:flex; justify-content:space-between; gap:8px; font-size:clamp(10px,2.6vw,13px); flex-wrap:wrap;}
   #ui span{background:linear-gradient(180deg,rgba(16,28,55,.92),rgba(10,18,38,.92)); border:1px solid rgba(255,255,255,.14); border-radius:999px; padding:5px 12px; box-shadow:0 3px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08); text-shadow:0 1px 2px #000; white-space:nowrap;}
   .stat{font-weight:bold; color:#ffd76a;}
   #xpslot{position:absolute; left:0; top:18%; height:64%; width:13px; background:rgba(8,16,34,.78); border:1.5px solid rgba(255,255,255,.22); border-radius:0 8px 8px 0; box-shadow:0 2px 8px rgba(0,0,0,.4); overflow:hidden;}
   #xpbar{position:absolute; bottom:0; left:0; right:0; height:0%; transition:height .15s; background:linear-gradient(0deg,#2fce5e,#7dff9e); box-shadow:0 0 10px rgba(76,224,122,.8);}
   #xptext{position:absolute; left:16px; top:50%; transform:translateY(-50%); writing-mode:vertical-rl; font-size:9px; font-weight:bold; color:#b8ffd2; opacity:.9; text-shadow:0 1px 2px #000; pointer-events:none;}
   /* ---- 覆盖层：手游主界面 ---- */
-  #overlay{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(8,14,28,.9); border-radius:14px; text-align:center; padding:18px; z-index:5;}
+  #overlay{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(8,14,28,.9); border-radius:14px; text-align:center; padding:18px; z-index:5; overflow-y:auto;}
   #overlay.hidden{display:none;}
-  #overlay.menu{background:radial-gradient(120% 90% at 50% 0%, #2a4d9e 0%, #16336f 45%, #0a1c44 100%); overflow:hidden;}
+  #overlay.menu{background:radial-gradient(120% 90% at 50% 0%, #2a4d9e 0%, #16336f 45%, #0a1c44 100%); overflow-y:auto;}
   #overlay.menu::before{content:''; position:absolute; inset:0; background:radial-gradient(60% 40% at 50% 108%, rgba(255,180,40,.18), transparent 70%); pointer-events:none;}
-  #overlay h2{margin:0; font-size:32px; font-weight:900; letter-spacing:3px;
+  #overlay h2{margin:0; font-size:clamp(22px,7vw,32px); font-weight:900; letter-spacing:3px;
     background:linear-gradient(180deg,#fff6cf 20%,#ffd76a 55%,#f7a916 90%);
     -webkit-background-clip:text; background-clip:text; color:transparent;
     filter:drop-shadow(0 2px 0 rgba(120,60,0,.65)) drop-shadow(0 4px 10px rgba(0,0,0,.5));}
@@ -93,6 +94,13 @@
 (function(){
 addEventListener('error',e=>{var t=document.getElementById('ovTitle'),x=document.getElementById('ovText');if(t){t.textContent='⚠️ 脚本加载出错';if(x)x.textContent=(e.message||'')+' —— 请用浏览器直接打开本文件游玩。';}});
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+// ---- 竖屏自适应：手机竖屏时用竖版画布（世界随比例扩展） ----
+(function(){
+  const vw=(typeof window!=='undefined'&&window.innerWidth)||0;
+  const vh=(typeof window!=='undefined'&&window.innerHeight)||0;
+  if(vw&&vh&&vh>vw){ cv.width=Math.max(360,Math.min(560,Math.round(vw)));
+    cv.height=Math.max(540,Math.min(940,Math.round(vh*0.92))); }
+})();
 const W=cv.width, H=cv.height;
 const WW=W*2, WH=H*2; // 世界是屏幕的2倍
 const ov=document.getElementById('overlay'), ovT=document.getElementById('ovTitle'), ovX=document.getElementById('ovText'), ch=document.getElementById('choices'), btn=document.getElementById('btn'), pauseBtn=document.getElementById('pauseBtn'), nav=document.getElementById('nav'), navShop=document.getElementById('navShop'), navPlay=document.getElementById('navPlay');
@@ -125,13 +133,21 @@ const Spot={
       if(r.bottom<0||r.top>H||r.right<0||r.left>W) t.scrollIntoView({block:'center'}); }
     const rects=targets.map(t=>{ const r=t.getBoundingClientRect();
       return [Math.max(0,r.left-pad),Math.max(0,r.top-pad),Math.min(W,r.right+pad),Math.min(H,r.bottom+pad)]; });
-    let pts='evenodd, 0 0, '+W+'px 0, '+W+'px '+H+'px, 0 '+H+'px';
-    for(const [l,t,r,b] of rects) pts+=(', '+l+'px '+t+'px, '+r+'px '+t+'px, '+r+'px '+b+'px, '+l+'px '+b+'px');
     const wrap=document.createElement('div');
     wrap.style.cssText='position:fixed; inset:0; z-index:90; pointer-events:none;';
-    const blocker=document.createElement('div');
-    blocker.style.cssText='position:absolute; inset:0; background:rgba(4,9,22,.9); clip-path:'+pts+'; pointer-events:auto;';
-    wrap.appendChild(blocker);
+    // ---- 挡板：用矩形条拼出洞口（不依赖 clip-path 的点击穿透，兼容所有手机内核） ----
+    const catcher=(l,t,r,b)=>{ const d=document.createElement('div');
+      d.style.cssText='position:fixed; left:'+l+'px; top:'+t+'px; width:'+(r-l)+'px; height:'+(b-t)+'px; background:rgba(4,9,22,.9); pointer-events:auto;';
+      wrap.appendChild(d); };
+    const sorted=rects.slice().sort((a,b)=>a[1]-b[1]);
+    let y=0;
+    for(const [l,t,r,b] of sorted){
+      if(t>y) catcher(0,y,W,t-y);           // 洞上方整条
+      if(l>0) catcher(0,t,l,b-t);           // 洞左侧
+      if(r<W) catcher(r,t,W-r,b-t);         // 洞右侧
+      y=Math.max(y,b);
+    }
+    if(y<H) catcher(0,y,W,H-y);             // 最后一个洞下方整条
     for(const [l,t,r,b] of rects){ // 发光洞边框
       const ring=document.createElement('div');
       ring.style.cssText='position:fixed; left:'+l+'px; top:'+t+'px; width:'+(r-l)+'px; height:'+(b-t)+'px; pointer-events:none; border:3px solid #ffd76a; border-radius:12px; box-shadow:0 0 18px rgba(255,215,106,.7), inset 0 0 12px rgba(255,215,106,.25); animation:spotPulse 1.2s infinite;';
@@ -537,8 +553,16 @@ addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;
 });
 addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 let touch=null;
-cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect(); touch={x:(e.clientX-r.left)*W/r.width+(S?S.camx:0), y:(e.clientY-r.top)*H/r.height+(S?S.camy:0)};});
-cv.addEventListener('pointermove',e=>{if(touch&&(e.pointerType==='touch'||e.buttons>0)){const r=cv.getBoundingClientRect(); touch.x=(e.clientX-r.left)*W/r.width+(S?S.camx:0); touch.y=(e.clientY-r.top)*H/r.height+(S?S.camy:0);}});
+// ---- 摇杆式移动：手指第一次按下处为基点，拖动=方向，抬起重置 ----
+let joy=null;
+cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(); const s=cv.width/r.width;
+  joy={bx:(e.clientX-r.left)*s, by:(e.clientY-r.top)*s, dx:0, dy:0}; });
+cv.addEventListener('pointermove',e=>{ if(!joy) return; const r=cv.getBoundingClientRect(); const s=cv.width/r.width;
+  const RMAX=55; let dx=(e.clientX-r.left)*s-joy.bx, dy=(e.clientY-r.top)*s-joy.by;
+  const d=Math.hypot(dx,dy); if(d>RMAX){ dx=dx/d*RMAX; dy=dy/d*RMAX; }
+  joy.dx=dx; joy.dy=dy; });
+const joyEnd=()=>{ joy=null; };
+cv.addEventListener('pointerup',joyEnd); cv.addEventListener('pointercancel',joyEnd);
 addEventListener('pointerup',()=>touch=null);
 addEventListener('pointercancel',()=>touch=null);
 
@@ -559,7 +583,7 @@ function update(dt){
   let dx=0,dy=0;
   if(keys['w']||keys['arrowup'])dy--; if(keys['s']||keys['arrowdown'])dy++;
   if(keys['a']||keys['arrowleft'])dx--; if(keys['d']||keys['arrowright'])dx++;
-  if(touch){const d=Math.hypot(touch.x-S.px,touch.y-S.py); if(d>8){dx=touch.x-S.px; dy=touch.y-S.py;}}
+  if(joy&&(Math.abs(joy.dx)>5||Math.abs(joy.dy)>5)){ dx=joy.dx; dy=joy.dy; } // 摇杆方向=基点偏移，模拟量控制
   const l=Math.hypot(dx,dy)||1;
   const spd=115*(1+0.01*SAVE.up.spd)*(1+0.2*S.keys.spd);
   S.px=Math.max(14,Math.min(WW-14,S.px+dx/l*spd*dt));
@@ -1157,6 +1181,13 @@ function draw(){
   const vg=ctx.createRadialGradient(W/2,H/2,H*0.42,W/2,H/2,H*0.78);
   vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,.38)');
   ctx.fillStyle=vg; ctx.fillRect(-30,-30,W+60,H+60);
+  if(joy&&S&&!S.over){ // 摇杆可视化：基点圈+摇杆头
+    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(joy.bx,joy.by,55,0,7); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.25)'; ctx.beginPath(); ctx.arc(joy.bx,joy.by,55,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.arc(joy.bx+joy.dx,joy.by+joy.dy,22,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.8)'; ctx.beginPath(); ctx.arc(joy.bx+joy.dx,joy.by+joy.dy,13,0,7); ctx.fill();
+  }
   S.texts.forEach((t,i)=>{ ctx.globalAlpha=Math.min(1,t.life); ctx.fillStyle='#ffd76a'; ctx.fillText(t.txt,W/2,H/2-50-i*26); ctx.globalAlpha=1; });
   if(S.bossCount>0){ // 顶部Boss血条：名字+血量
     let by=16;
@@ -1328,7 +1359,7 @@ function showDefDetail(it){
   const info=DEF_DETAIL[it.id]||['','',it.ds];
   const d=document.createElement('div'); d.id='defdetail';
   d.style.cssText='width:min(340px,88%); background:linear-gradient(180deg,rgba(36,54,94,.95),rgba(27,42,74,.95)); border:1.5px solid rgba(255,180,40,.5); border-radius:12px; padding:10px 14px; text-align:left; font-size:12px; color:#cfdcff; line-height:1.6; box-shadow:0 6px 16px rgba(0,0,0,.4); position:relative;';
-  d.innerHTML='<b style="color:#ffd76a; font-size:14px;">'+it.ic+' '+info[0]+'</b>　<span style="color:#9fb0d0;">💰'+it.cost+'</span><br>'+info[1]+'<br><span style="color:#8fa3c8;">已布置 '+(SAVE.defense[selLevel]||[]).filter(x=>x.id===it.id).length+' 个 · 按住拖到地图上松手购买，点已布置的图标拆除（返还50%）</span>';
+  d.innerHTML='<b style="color:#ffd76a; font-size:14px;">'+it.ic+' '+info[0]+'</b>　<span style="color:#9fb0d0;">当前价 💰'+Math.round(it.cost*(1+0.5*(SAVE.defense[selLevel]||[]).filter(x=>x.id===it.id).length))+'（越买越贵）</span><br>'+info[1]+'<br><span style="color:#8fa3c8;">已布置 '+(SAVE.defense[selLevel]||[]).filter(x=>x.id===it.id).length+' 个 · 按住拖到地图上松手购买，点已布置的图标拆除（返还50%）</span>';
   d.onclick=()=>d.remove();
   const bar=document.getElementById('choices').querySelector('div');
   if(old) old.remove();
@@ -1341,7 +1372,7 @@ function buildDefend(){
   const bar=document.createElement('div'); bar.style.cssText='display:flex; gap:8px; flex-wrap:wrap; justify-content:center; position:relative;';
   for(const it of DEF_ITEMS){
     const b=document.createElement('button');
-    b.textContent=it.ic+' '+it.nm+' 💰'+it.cost;
+    b.textContent=it.ic+' '+it.nm+' 💰'+Math.round(it.cost*(1+0.5*arr.filter(d=>d.id===it.id).length)); // 越买越贵
     b.style.cssText='font-size:13px; padding:8px 12px; letter-spacing:0; box-shadow:0 2px 0 #8a4a00;'+(defSel===it.id?' border:2px solid #ffd76a;':'');
     const beginDrag=ev=>{
       ev.preventDefault();
@@ -1356,7 +1387,8 @@ function buildDefend(){
       ghost.style.left=sp.clientX+'px'; ghost.style.top=sp.clientY+'px';
       document.body.appendChild(ghost);
       const st=document.getElementById('defstatus');
-      const upd=()=>{ st.textContent='拖到地图上松手布置「'+it.nm+'」 · 金币 '+SAVE.coins+' − '+it.cost+' = '+(SAVE.coins-it.cost); };
+      const curCost=()=>Math.round(it.cost*(1+0.5*arr.filter(d=>d.id===it.id).length));
+      const upd=()=>{ st.textContent='拖到地图上松手布置「'+it.nm+'」 · 金币 '+SAVE.coins+' − '+curCost()+' = '+(SAVE.coins-curCost())+'（同类越多越贵）'; };
       upd();
       const mv=e=>{ const p=tp(e); ghost.style.left=p.clientX+'px'; ghost.style.top=p.clientY+'px'; if(e.cancelable&&e.touches) e.preventDefault(); };
       const fin=e=>{
@@ -1370,14 +1402,14 @@ function buildDefend(){
         if(!map) return;
         const r=map.getBoundingClientRect();
         if(p.clientX<r.left||p.clientX>r.right||p.clientY<r.top||p.clientY>r.bottom) return; // 拖回按钮区=取消
-        if(SAVE.coins<it.cost){ ovT.textContent='⚠️ 金币不足（需要 '+it.cost+'）'; setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),900); return; }
+        if(SAVE.coins<curCost()){ ovT.textContent='⚠️ 金币不足（需要 '+curCost()+'，同类道具越买越贵）'; setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),900); return; }
         if(arr.length>=8){ ovT.textContent='⚠️ 每关最多8个道具'; setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),900); return; }
         const x=(p.clientX-r.left)/r.width*WW, y=(p.clientY-r.top)/r.height*WH;
         // ---- 防刷金币：同一位置同类道具禁止重复放置；每类最多4个 ----
         if(arr.some(d=>d.id===it.id&&Math.hypot(d.x-x,d.y-y)<30)){ setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),900); ovT.textContent='⚠️ 这个位置已经有「'+it.nm+'」了'; return; }
         if(arr.filter(d=>d.id===it.id).length>=4){ setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),900); ovT.textContent='⚠️ 「'+it.nm+'」每关最多布置4个'; return; }
         if(SAVE.tut===2&&it.id!=='turret'){ setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),1200); ovT.textContent='教程：先拖动机枪（炮塔）到地图上'; return; }
-        SAVE.coins-=it.cost; arr.push({id:it.id,x:Math.round(x),y:Math.round(y)}); persist(); buildDefend();
+        SAVE.coins-=curCost(); arr.push({id:it.id,x:Math.round(x),y:Math.round(y)}); persist(); buildDefend();
         // ---- 教程：布防两个机枪后引导出战 ----
         if(SAVE.tut===2&&arr.filter(d=>d.id==='turret').length>=2){ SAVE.tut=3; persist(); ovT.textContent='✅ 教程完成！点下方「出战第1关」开始战斗'; }
       };
