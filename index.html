@@ -12,7 +12,9 @@
   #wrap{width:100%; max-width:860px; margin:0 auto; position:relative;}
   canvas{display:block; width:auto; height:auto; max-width:100%; max-height:100dvh; margin:0 auto; border-radius:14px; touch-action:none; background:#1a2332;}
   /* ---- HUD: 圆角胶囊 ---- */
-  #ui{position:absolute; top:10px; left:10px; right:10px; padding:0; pointer-events:none; display:flex; justify-content:space-between; gap:8px; font-size:clamp(10px,2.6vw,13px); flex-wrap:wrap;}
+  #ui{position:absolute; top:10px; left:10px; right:10px; padding:0; pointer-events:none; display:flex; justify-content:space-between; align-items:flex-start; gap:8px; font-size:clamp(10px,2.6vw,13px); flex-wrap:wrap;}
+  #uiright{display:flex; flex-direction:column; gap:5px; align-items:flex-end;}
+  .tutdim{opacity:.35!important; filter:grayscale(.85); pointer-events:none;}
   #ui span{background:linear-gradient(180deg,rgba(16,28,55,.92),rgba(10,18,38,.92)); border:1px solid rgba(255,255,255,.14); border-radius:999px; padding:5px 12px; box-shadow:0 3px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08); text-shadow:0 1px 2px #000; white-space:nowrap;}
   .stat{font-weight:bold; color:#ffd76a;}
   #xpslot{position:absolute; left:0; top:18%; height:64%; width:13px; background:rgba(8,16,34,.78); border:1.5px solid rgba(255,255,255,.22); border-radius:0 8px 8px 0; box-shadow:0 2px 8px rgba(0,0,0,.4); overflow:hidden;}
@@ -74,8 +76,11 @@
   <div id="xpslot"><div id="xpbar"></div></div>
   <div id="xptext">0/5</div>
   <div id="ui">
-    <span>❤️ <span class="stat" id="hp">10/10</span>　⚔️ <span class="stat" id="lvl">1</span>　💀 <span class="stat" id="kills">0</span></span>
-    <span>💰 <span class="stat" id="coin">0</span>　⏱ <span class="stat" id="time">0:00</span></span>
+    <span>❤️ <span class="stat" id="hp">10/10</span></span>
+    <div id="uiright">
+      <span>💰 <span class="stat" id="coin">0</span></span>
+      <span>⏱ <span class="stat" id="time">0:00</span></span>
+    </div>
   </div>
   <div id="overlay">
     <h2 id="ovTitle">像素幸存者</h2>
@@ -94,17 +99,22 @@
 (function(){
 addEventListener('error',e=>{var t=document.getElementById('ovTitle'),x=document.getElementById('ovText');if(t){t.textContent='⚠️ 脚本加载出错';if(x)x.textContent=(e.message||'')+' —— 请用浏览器直接打开本文件游玩。';}});
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-// ---- 竖屏自适应：手机竖屏时用竖版画布（世界随比例扩展） ----
+// ---- 竖屏自适应 + 高清屏（DPR）适配：逻辑分辨率不变，物理分辨率×DPR 抗糊 ----
+let DPR=1;
 (function(){
   const vw=(typeof window!=='undefined'&&window.innerWidth)||0;
   const vh=(typeof window!=='undefined'&&window.innerHeight)||0;
-  if(vw&&vh&&vh>vw){ cv.width=Math.max(360,Math.min(560,Math.round(vw)));
-    cv.height=Math.max(540,Math.min(940,Math.round(vh*0.92))); }
+  DPR=Math.min((typeof window!=='undefined'&&window.devicePixelRatio)||1,2);
+  let lw=800, lh=520;
+  if(vw&&vh&&vh>vw){ lw=Math.max(360,Math.min(560,Math.round(vw)));
+    lh=Math.max(540,Math.min(940,Math.round(vh*0.92))); }
+  cv.width=Math.round(lw*DPR); cv.height=Math.round(lh*DPR);
+  cv._lw=lw; cv._lh=lh;
 })();
-const W=cv.width, H=cv.height;
+const W=cv._lw, H=cv._lh;
 const WW=W*2, WH=H*2; // 世界是屏幕的2倍
 const ov=document.getElementById('overlay'), ovT=document.getElementById('ovTitle'), ovX=document.getElementById('ovText'), ch=document.getElementById('choices'), btn=document.getElementById('btn'), pauseBtn=document.getElementById('pauseBtn'), nav=document.getElementById('nav'), navShop=document.getElementById('navShop'), navPlay=document.getElementById('navPlay');
-const hpEl=document.getElementById('hp'), lvlEl=document.getElementById('lvl'), kEl=document.getElementById('kills'), tEl=document.getElementById('time'), xpEl=document.getElementById('xpbar'), xpNextEl=document.getElementById('xptext'), coinEl=document.getElementById('coin');
+const hpEl=document.getElementById('hp'), tEl=document.getElementById('time'), xpEl=document.getElementById('xpbar'), xpNextEl=document.getElementById('xptext'), coinEl=document.getElementById('coin');
 const rand=(a,b)=>a+Math.random()*(b-a);
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 
@@ -178,7 +188,7 @@ const AdKit={
   showRewarded(onReward,onSkip){
     const ov2=document.getElementById('overlay'), ovT2=document.getElementById('ovTitle'),
           ovX2=document.getElementById('ovText'), ch2=document.getElementById('choices');
-    if(S&&!S.over) S.paused=true;
+    if(S&&!S.over){ var wasPaused=S.paused; S.paused=true; }
     // ---- 界面快照：广告关闭/放弃后原样恢复，避免卡死 ----
     const snapT=ovT2.textContent, snapX=ovX2.innerHTML;
     const snapCh=document.createElement('div');
@@ -193,7 +203,7 @@ const AdKit={
     ch2.innerHTML='';
     const skip=document.createElement('button');
     skip.textContent='⏭ 放弃（无奖励）'; skip.style.background='#888'; skip.style.color='#fff';
-    skip.onclick=()=>{ ch2.innerHTML=''; restore(); if(S&&!S.over)S.paused=false; onSkip&&onSkip(); };
+    skip.onclick=()=>{ clearInterval(iv); ch2.innerHTML=''; restore(); if(S&&!S.over)S.paused=!!wasPaused; onSkip&&onSkip(); };
     ch2.appendChild(skip);
     const iv=setInterval(()=>{ t--;
       ovX2.innerHTML='🎬 模拟激励视频 <b style="font-size:22px">'+t+'</b> 秒<br><span style="font-size:11px;color:#7285a8">上线时替换为抖音/微信官方广告SDK</span>';
@@ -203,7 +213,7 @@ const AdKit={
         ovX2.innerHTML='奖励已解锁！';
         skip.remove();
         const ok=document.createElement('button'); ok.textContent='🎁 领取奖励';
-        ok.onclick=()=>{ ch2.innerHTML=''; restore(); if(S&&!S.over)S.paused=false; onReward(); };
+        ok.onclick=()=>{ clearInterval(iv); ch2.innerHTML=''; restore(); if(S&&!S.over)S.paused=!!wasPaused; onReward(); };
         ch2.appendChild(ok);
       }
     },1000);
@@ -555,9 +565,9 @@ addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 let touch=null;
 // ---- 摇杆式移动：手指第一次按下处为基点，拖动=方向，抬起重置 ----
 let joy=null;
-cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(); const s=cv.width/r.width;
+cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(); const s=W/r.width;
   joy={bx:(e.clientX-r.left)*s, by:(e.clientY-r.top)*s, dx:0, dy:0}; });
-cv.addEventListener('pointermove',e=>{ if(!joy) return; const r=cv.getBoundingClientRect(); const s=cv.width/r.width;
+cv.addEventListener('pointermove',e=>{ if(!joy) return; const r=cv.getBoundingClientRect(); const s=W/r.width;
   const RMAX=55; let dx=(e.clientX-r.left)*s-joy.bx, dy=(e.clientY-r.top)*s-joy.by;
   const d=Math.hypot(dx,dy); if(d>RMAX){ dx=dx/d*RMAX; dy=dy/d*RMAX; }
   joy.dx=dx; joy.dy=dy; });
@@ -822,9 +832,10 @@ function update(dt){
   if(S.test) S.spawnTimer=999;
   if(!S.test && S.spawnTimer<=0){
     S.spawnTimer=Math.max(0.9, 1.8-S.t*0.002);
-    spawnEnemy();
-    if(S.t>40 && Math.random()<0.4) spawnEnemy();
-    if(S.t>120 && Math.random()<0.4) spawnEnemy();
+    const CAP=45; // 同屏刷怪上限（性能+可读性）
+    if(S.enemies.length<CAP) spawnEnemy();
+    if(S.t>40 && S.enemies.length<CAP && Math.random()<0.4) spawnEnemy();
+    if(S.t>120 && S.enemies.length<CAP && Math.random()<0.4) spawnEnemy();
   }
   if(!S.test&&!S.airDone&&S.bossCount===0&&S.t>=S.nextBossAt-5&&S.t<S.nextBossAt){ // 飞行器倒计时
     const sec=Math.ceil(S.nextBossAt-S.t);
@@ -843,7 +854,7 @@ function update(dt){
 
   // HUD
   hpEl.textContent=Math.max(0,Math.ceil(S.hp))+'/'+S.maxhp;
-  lvlEl.textContent=S.lvl; kEl.textContent=S.kills; coinEl.textContent=SAVE.coins+S.coinsRun;
+  coinEl.textContent=SAVE.coins+S.coinsRun;
   const m=Math.floor(S.t/60), s=Math.floor(S.t%60);
   tEl.textContent=m+':'+String(s).padStart(2,'0');
   xpEl.style.height=Math.min(100,S.xp/S.xpNext*100)+'%';
@@ -887,7 +898,7 @@ function openAirshop(){
   const b3=document.createElement('div'); b3.className='card';
   b3.innerHTML='<div class="ic">📺</div><div class="nm">广告援助</div><div class="ds">看广告立刻获得 60 金币（每局1次）</div><div class="lv">'+(S.adAid?'✅ 已使用':'💰 +60')+'</div>';
   if(S.adAid) b3.style.opacity=.5;
-  b3.onclick=()=>{ if(S.adAid)return; AdKit.showRewarded(()=>{ S.adAid=true; SAVE.coins+=60; persist(); coinEl.textContent=SAVE.coins; openAirshop(); }); };
+  b3.onclick=()=>{ if(S.adAid)return; AdKit.showRewarded(()=>{ S.adAid=true; SAVE.coins+=60; persist(); coinEl.textContent=SAVE.coins+S.coinsRun; openAirshop(); }); };
   ch.appendChild(b3);
   const go=document.createElement('button'); go.textContent='🚀 起飞返回战场';
   go.onclick=()=>{ S.paused=false; ov.classList.add('hidden'); ov.classList.remove('menu'); };
@@ -918,7 +929,7 @@ function doRevive(){
   // 复活时把主角身边的怪推开一圈，给玩家喘息
   for(const e of S.enemies){ if(e.type!=='boss'){ const a=Math.atan2(e.y-S.py,e.x-S.px); const d=Math.hypot(e.x-S.px,e.y-S.py)||1; const push=Math.max(0,220-d); e.x+=Math.cos(a)*push; e.y+=Math.sin(a)*push; } }
   S.texts.push({txt:'✨ 复活！继续战斗！', life:2});
-  ch.innerHTML=''; ov.classList.add('hidden'); ov.classList.remove('menu');
+  ch.innerHTML=''; ov.classList.add('hidden'); ov.classList.remove('menu'); pauseBtn.classList.remove('hidden'); // 恢复暂停按钮（Bug3）
   AudioSys.startMusic(false);
   loop();
 }
@@ -933,7 +944,7 @@ function showDeathResults(){
   ch.innerHTML='';
   // ---- 双倍结算广告点 ----
   const db=document.createElement('button'); db.textContent='📺 广告领双倍金币 ×2';
-  db.onclick=()=>{ if(S._paid)return; AdKit.showRewarded(()=>{ if(S._paid)return; S._paid=true; SAVE.coins+=S._got; persist(); db.textContent='✅ 已双倍 +'+S._got; db.style.background='#2fce5e'; db.style.color='#fff'; coinEl.textContent=SAVE.coins; }); };
+  db.onclick=()=>{ if(S._paid)return; AdKit.showRewarded(()=>{ if(S._paid)return; S._paid=true; SAVE.coins+=S._got; persist(); db.textContent='✅ 已双倍 +'+S._got; db.style.background='#2fce5e'; db.style.color='#fff'; coinEl.textContent=SAVE.coins+S.coinsRun; }); };
   ch.appendChild(db);
   const hb=document.createElement('button'); hb.textContent='🏠 返回主页'; hb.style.background='#888'; hb.onclick=()=>showPage('home'); ch.appendChild(hb);
   const rb=document.createElement('button'); rb.textContent='🔁 再战第'+selLevel+'关'; rb.onclick=()=>startLevel(); ch.appendChild(rb);
@@ -942,6 +953,7 @@ function showDeathResults(){
 
 // ---------- drawing ----------
 function draw(){
+  ctx.setTransform(DPR,0,0,DPR,0,0); // 物理分辨率放大，逻辑坐标不变（抗糊）
   if(S&&S.shake>0){ ctx.save(); ctx.translate(rand(-S.shake,S.shake),rand(-S.shake,S.shake)); S.shake*=0.85; if(S.shake<0.3)S.shake=0; }
   ctx.fillStyle='#10151f'; ctx.fillRect(-30,-30,W+60,H+60);
   if(!S){ ctx.font='bold 11px monospace'; ctx.textAlign='left'; ctx.fillStyle='rgba(255,255,255,.25)'; ctx.fillText('V24', 8, H-8); if(S&&S.shake>0)ctx.restore(); return; }
@@ -1313,11 +1325,15 @@ function showHomeLevels(){
     t.style.cssText='font-size:13px; color:#ffe9b8; margin:0;';
     ch.appendChild(t);
   }else if(SAVE.tut===2){ Spot.show([navPlay],'第二步：选择关卡后进入「布防」'); }
+  // 教程期间非指引按钮全部置灰
+  navPlay.classList[SAVE.tut===1?'add':'remove']('tutdim');
+  navShop.classList[SAVE.tut===2?'add':'remove']('tutdim');
   // ---- 每日签到入口（未签今天则显示） ----
   if(checkDailySign()){
     const sb=document.createElement('button');
     sb.textContent='📅 每日签到 · 待领取';
     sb.style.cssText='border-color:#ffd76a; color:#ffd76a;';
+    if(SAVE.tut===1||SAVE.tut===2) sb.classList.add('tutdim');
     sb.onclick=()=>openDailySign();
     ch.appendChild(sb);
   }
@@ -1338,6 +1354,7 @@ function renderLevelList(){
     const b=document.createElement('button');
     b.textContent=(locked?'🔒 ':'▶ ')+['第一关','第二关','第三关','第四关','第五关'][i-1]+(locked?'':'　难度 ×'+[1,1.6,2.4,3.2,4.2][i-1]);
     if(locked) b.className='locked';
+    if(SAVE.tut===2) b.classList.add('tutdim'); // 教程期灰色，不可点
     if(i===Math.min(SAVE.unlocked,5)) b.className+=' sel';
     if(!locked) b.onclick=()=>{
       selLevel=i; pickMade=true;
@@ -1374,6 +1391,7 @@ function buildDefend(){
     const b=document.createElement('button');
     b.textContent=it.ic+' '+it.nm+' 💰'+Math.round(it.cost*(1+0.5*arr.filter(d=>d.id===it.id).length)); // 越买越贵
     b.style.cssText='font-size:13px; padding:8px 12px; letter-spacing:0; box-shadow:0 2px 0 #8a4a00;'+(defSel===it.id?' border:2px solid #ffd76a;':'');
+    if(SAVE.tut===2&&it.id!=='turret') b.classList.add('tutdim'); else b.classList.remove('tutdim');
     const beginDrag=ev=>{
       ev.preventDefault();
       const tp=t=>{ const p=t.changedTouches?t.changedTouches[0]:(t.touches&&t.touches[0])||t; return p; };
