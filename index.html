@@ -130,7 +130,34 @@ SAVE.up=Object.assign({dmg:0,hp:0,spd:0,rate:0},SAVE.up);
 SAVE.defense=SAVE.defense||{};
 if(!SAVE.char) SAVE.char='warrior';   // 角色：warrior/scholar/merchant/engineer
 if(!SAVE.weapon) SAVE.weapon='gun';   // 武器：gun/rocket/blade
-function persist(){ try{ localStorage.setItem('sv_save',JSON.stringify(SAVE)); }catch(e){} }
+let _pTimer=null;
+function _flushSave(){ _pTimer=null; try{ localStorage.setItem('sv_save',JSON.stringify(SAVE)); }catch(e){} }
+function persist(){ SAVE.lastSeen=Date.now(); if(!_pTimer) _pTimer=setTimeout(_flushSave,400); }
+addEventListener('beforeunload',()=>{ if(_pTimer){ clearTimeout(_pTimer); _flushSave(); } });
+// ---- 每日任务 ----
+const DAILY_TASKS=[
+ {id:'kills', ic:'💀', nm:'击杀 50 只怪物', need:50, r:100},
+ {id:'coins', ic:'💰', nm:'拾取 300 金币', need:300, r:150},
+ {id:'secs',  ic:'⏱', nm:'单局存活 180 秒', need:180, r:200},
+];
+function ensureDaily(){ if(!SAVE.daily||SAVE.daily.date!==todayStr()){ SAVE.daily={date:todayStr(),kills:0,coins:0,secs:0,claimed:[false,false,false],ad:0}; persist(); } }
+// ---- 成就系统 ----
+const ACHIEVEMENTS=[
+ {id:'k100',  ic:'💀', nm:'新手猎人：累计击杀 100',  test:v=>v.kills>=100,  r:200},
+ {id:'k1000', ic:'⚔️', nm:'杀怪如麻：累计击杀 1000', test:v=>v.kills>=1000, r:600},
+ {id:'k5000', ic:'🔥', nm:'怪物末日：累计击杀 5000', test:v=>v.kills>=5000, r:2000},
+ {id:'b200',  ic:'🌟', nm:'单局击杀 200',            test:v=>v.best>=200,   r:400},
+ {id:'l3',    ic:'🏅', nm:'打通第三关',              test:v=>v.maxLv>=3,    r:500},
+ {id:'l5',    ic:'👑', nm:'打通第五关（通关！）',    test:v=>v.maxLv>=5,    r:1500},
+];
+function achStats(){ return {kills:SAVE.stats&&SAVE.stats.kills||0, best:SAVE.stats&&SAVE.stats.best||0, maxLv:SAVE.stats&&SAVE.stats.maxLv||0}; }
+let OFFLINE_GIFT=0;
+try{
+  const last=(JSON.parse(localStorage.getItem('sv_save')||'{}').lastSeen)||0; // 先读盘, 防止 ensureDaily 的 persist 覆盖
+  const mins=Math.min(480, Math.floor((Date.now()-last)/60000)); // 上限8小时
+  if(mins>=1) OFFLINE_GIFT=mins*2;
+  ensureDaily();
+}catch(e){}
 if(SAVE.sound===undefined) SAVE.sound=true;
 // ---- 新手教程状态：0=未开始 1=去商店买血量 2=布防放两个机枪 3=完成 ----
 if(SAVE.tut===undefined) SAVE.tut=0;
@@ -191,6 +218,16 @@ const AdKit={
   showRewarded(onReward,onSkip){
     const ov2=document.getElementById('overlay'), ovT2=document.getElementById('ovTitle'),
           ovX2=document.getElementById('ovText'), ch2=document.getElementById('choices');
+    if((SAVE.adToday||0)>=5){ // 每日广告疲劳上限
+      ovT2.textContent='📺 今日广告次数已用完';
+      ovX2.innerHTML='每天最多看 5 个广告哦，明天再来！<br><span style="font-size:11px;color:#7285a8">正常游戏照样能领金币～</span>';
+      ch2.innerHTML='';
+      const cb=document.createElement('button'); cb.textContent='知道了';
+      cb.onclick=()=>{ ch2.innerHTML=''; ov2.classList.add('hidden'); };
+      ch2.appendChild(cb); ov2.classList.remove('hidden');
+      return;
+    }
+    SAVE.adToday=(SAVE.adToday||0)+1;
     if(S&&!S.over){ var wasPaused=S.paused; S.paused=true; }
     // ---- 界面快照：广告关闭/放弃后原样恢复，避免卡死 ----
     const snapT=ovT2.textContent, snapX=ovX2.innerHTML;
@@ -202,14 +239,14 @@ const AdKit={
     ov2.classList.remove('hidden','menu');
     let t=15;
     ovT2.textContent='📺 广告播放中…';
-    ovX2.innerHTML='🎬 模拟激励视频 <b style="font-size:22px">'+t+'</b> 秒<br><span style="font-size:11px;color:#7285a8">上线时替换为抖音/微信官方广告SDK</span>';
+    ovX2.innerHTML='🎬 模拟激励视频 <b style="font-size:22px">'+t+'</b> 秒<br><span style="font-size:11px;color:#7285a8">今日剩余 '+(5-(SAVE.adToday||0))+' 个广告 · 上线时替换为官方广告SDK</span>';
     ch2.innerHTML='';
     const skip=document.createElement('button');
     skip.textContent='⏭ 放弃（无奖励）'; skip.style.background='#888'; skip.style.color='#fff';
     skip.onclick=()=>{ clearInterval(iv); ch2.innerHTML=''; restore(); if(S&&!S.over)S.paused=!!wasPaused; onSkip&&onSkip(); };
     ch2.appendChild(skip);
     const iv=setInterval(()=>{ t--;
-      ovX2.innerHTML='🎬 模拟激励视频 <b style="font-size:22px">'+t+'</b> 秒<br><span style="font-size:11px;color:#7285a8">上线时替换为抖音/微信官方广告SDK</span>';
+      ovX2.innerHTML='🎬 模拟激励视频 <b style="font-size:22px">'+t+'</b> 秒<br><span style="font-size:11px;color:#7285a8">今日剩余 '+(5-(SAVE.adToday||0))+' 个广告 · 上线时替换为官方广告SDK</span>';
       if(t<=0){
         clearInterval(iv);
         ovT2.textContent='✅ 广告观看完成';
@@ -229,18 +266,25 @@ function checkDailySign(){
   return true;
 }
 function openDailySign(){
-  const day=SAVE.signStreak? (SAVE.signStreak+1):1;
+  // 断签检测: 上次签到不是昨天 -> 连签重置
+  if(SAVE.lastSign && SAVE.lastSign!==todayStr()){
+    const y=new Date(Date.now()-86400000);
+    const yStr=y.getFullYear()+'-'+(y.getMonth()+1)+'-'+y.getDate();
+    if(SAVE.lastSign!==yStr) SAVE.signStreak=0;
+  }
+  const day=(SAVE.signStreak||0)+1;
   const base=[200,300,400,500,600,800,1000][(day-1)%7];
   const ov2=document.getElementById('overlay'), ovT2=document.getElementById('ovTitle'),
         ovX2=document.getElementById('ovText'), ch2=document.getElementById('choices');
-  ovT2.textContent='📅 每日签到 · 第'+day+'天';
-  ovX2.innerHTML='连续签到奖励递增：<b>'+base+'</b> 金币<br><span style="font-size:12px;color:#7285a8">看广告可翻倍 → '+base*2+'</span>';
+  const gift=day===7?500:0;
+  ovT2.textContent='📅 每日签到 · 第'+day+'天'+(gift?' 🎁大奖':'');
+  ovX2.innerHTML='连续签到奖励递增：<b>'+(base+gift)+'</b> 金币'+(gift?'（含第7天大礼包 +'+gift+'）':'')+'<br><span style="font-size:12px;color:#7285a8">看广告可翻倍 → '+(base+gift)*2+'</span>';
   ch2.innerHTML='';
   const s=document.createElement('button'); s.textContent='✅ 领取 '+base;
-  s.onclick=()=>{ SAVE.coins+=base; SAVE.lastSign=todayStr(); SAVE.signStreak=day; persist(); showPage('home'); };
+  s.onclick=()=>{ SAVE.coins+=base+gift; SAVE.lastSign=todayStr(); SAVE.signStreak=day; persist(); showPage('home'); };
   ch2.appendChild(s);
   const d=document.createElement('button'); d.textContent='📺 看广告翻倍领 '+base*2;
-  d.onclick=()=>{ AdKit.showRewarded(()=>{ SAVE.coins+=base*2; SAVE.lastSign=todayStr(); SAVE.signStreak=day; persist(); showPage('home'); }); };
+  d.onclick=()=>{ AdKit.showRewarded(()=>{ SAVE.coins+=(base+gift)*2; SAVE.lastSign=todayStr(); SAVE.signStreak=day; persist(); showPage('home'); }); };
   ch2.appendChild(d);
   ov2.classList.remove('hidden','menu');
 }
@@ -352,12 +396,14 @@ const UPGRADES=[
 function startGame(){
   const mul=[1,1.6,2.4,3.2,4.2][selLevel-1]; // 关卡难度从1开始
   if(SAVE.tut===3){ SAVE.tut=4; persist(); } // 开战后教程彻底结束：布防页不再重弹出战指引
-  S={t:0, test:!!testBoss, kills:0, level:selLevel, mul:mul, coinsRun:0, coins:[], ebullets:[], spawnTimer:1,
+  S={t:0, test:!!testBoss||rushOn, rushMode:rushOn, rushN:0, kills:0, level:selLevel, mul:mul, coinsRun:0, coins:[], ebullets:[], spawnTimer:1,
      px:W/2, py:H/2, x:W/2, y:H/2, camx:0, camy:0, moving:0, hp:10+SAVE.up.hp-(SAVE.char==='merchant'?2:0), maxhp:10+SAVE.up.hp-(SAVE.char==='merchant'?2:0), lvl:1, xp:0, xpNext:6,
      keys:{dmg:0,rate:0,multi:0,pierce:0,spd:0,hp:0,magnet:0,orbit:0,nova:0,regen:0,crit:0,xp:0,tdmg:0,trate:0,homing:0,blast:0,shield:0,thorn:0,wind:0},
      dashCd:0, dashing:0, dashInv:0, dashA:0, shieldT:0, thornT:0, volleyPending:0, volleyT:0, skillCd:0, uberT:0,
      bullets:[], enemies:[], gems:[], parts:[], novaT:0, orbitA:0, fireT:0.6, hurtT:0, fires:[],
-     bossCount:0, bossSpawnAt:0, paused:false, dnums:[], nextBossAt:120, over:false, choosing:false, revived:false, texts:[], aimA:0, walkT:0, defs:(SAVE.defense[selLevel]||[]).map(d=>({id:d.id,x:d.x,y:d.y,cd:0,ang:0})), runDmg:1, airDone:false};
+     bossCount:0, bossSpawnAt:0, paused:false, dnums:[], nextBossAt:120, over:false, choosing:false, revived:false, texts:[], aimA:0, walkT:0, defs:(SAVE.defense[selLevel]||[]).map(d=>({id:d.id,x:d.x,y:d.y,cd:0,ang:0})), runDmg:1, airDone:rushOn};
+  S.decor=(()=>{ const a=[]; for(let i=0;i<64;i++){ const k=Math.random();
+    a.push({t:k<0.5?'grass':k<0.75?'stone':k<0.9?'crack':'flower', x:rand(20,WW-20), y:rand(20,WH-20), s:rand(0.7,1.3), rot:rand(0,6.28), ph:rand(0,6)}); } return a; })();
      ov.classList.add('hidden'); ov.classList.remove('menu'); ch.innerHTML=''; pauseBtn.classList.remove('hidden'); dashBtn.classList.remove('hidden');
    cancelAnimationFrame(raf);
    Spot.hide(); // 进入战斗，清除所有引导
@@ -401,12 +447,13 @@ function spawnEnemy(){
 }
 function spawnBoss(){
   const mul=S.mul;
-  const isQQ = testBoss==='qq' || selLevel===2;
-  const isPun = testBoss==='pun' || selLevel===3;
-  const isNecro = testBoss==='necro' || selLevel===5;
+  let isQQ = testBoss==='qq' || selLevel===2;
+  let isPun = testBoss==='pun' || selLevel===3;
+  let isNecro = testBoss==='necro' || selLevel===5;
+  if(S.rushMode){ const m=S.rushN%4; isQQ=m===1; isPun=m===2; isNecro=m===3; } // Rush: 四种Boss轮换
   const name = isNecro?'死灵领主':isPun?'惩罚者':isQQ?'球球':'史莱姆';
   const bt=isNecro?'necro':isPun?'pun':isQQ?'qq':'slime';
-  const hpM=(15+S.t*0.75)*((isQQ||isPun)?4:1)*((isNecro)?5:1)*mul; // 球球/惩罚者 = 史莱姆 x4，死灵 x5
+  const hpM=(15+S.t*0.75)*((isQQ||isPun)?4:1)*((isNecro)?5:1)*mul*(S.rushMode?1+S.rushN*0.6:1); // 球球/惩罚者 = 史莱姆 x4，死灵 x5
   const side=Math.random()*4|0;
   const b={x:side===0?-35:side===1?WW+35:rand(80,WW-80), y:side===2?-35:side===3?WH+35:rand(80,WH-80),
     hp:hpM, maxhp:hpM, spd:55, r:26, dmg:3, color:isNecro?'#b08ff0':isPun?'#9b59d0':isQQ?'#4f8fe0':'#e03e6e', dark:isNecro?'#7a5ab0':isPun?'#6f3aa0':isQQ?'#2f5fa0':'#a02048',
@@ -416,7 +463,7 @@ function spawnBoss(){
   S.bossSpawnAt=S.t; S.enemies.push(b); S.bossCount++;
   AudioSys.sfx('boss'); AudioSys.startMusic(true);
   // ---- 第4关起：双Boss同时登场 ----
-  if(selLevel>=4&&!testBoss){
+  if(selLevel>=4&&!testBoss&&!S.rushMode){
     const b2=JSON.parse(JSON.stringify(b));
     b2.bossType= bt==='pun'?'qq':'pun';
     b2.bossName= b2.bossType==='qq'?'球球':'惩罚者';
@@ -432,7 +479,7 @@ function spawnBoss(){
 function spawnBossChild(x,y,gen,maxhp,e){
   const hp=gen===1? maxhp*0.3 : maxhp*0.5; // 大→中30%，中→小50%
   const c={x:x+rand(-14,14), y:y+rand(-14,14), hp, maxhp:hp,
-    spd:55, r:gen===1?20:15, dmg:gen===1?2:1, color:e.bossType==='qq'?'#4f8fe0':'#e03e6e', dark:'#a02048',
+    spd:55, r:gen===1?20:15, dmg:gen===1?2:1, color:e.bossType==='qq'?'#4f8fe0':e.bossType==='necro'?'#b08ff0':'#e03e6e', dark:e.bossType==='qq'?'#2f5fa0':e.bossType==='necro'?'#7a5ab0':'#a02048',
     hitT:0, xp:gen===1?4:2, type:'boss', bossName:e.bossName, bossType:e.bossType, gen, dead:false, wob:Math.random()*6,
     chargeT:0, tele:0, teleA:0, dashT:0, dashA:0};
   S.enemies.push(c); S.bossCount++;
@@ -443,6 +490,7 @@ function playerDmg(){ return (1+0.01*SAVE.up.dmg)*(1+0.25*S.keys.dmg)*(S.runDmg|
 function fireRate(){ return 1.4*(1+0.01*SAVE.up.rate)*(1+0.25*S.keys.rate); }
 function weaponFireMul(){ return SAVE.weapon==='rocket'?0.5:SAVE.weapon==='blade'?1.6:1; } // 火箭筒0.5×攻速/砍刀更快
 function fire(){
+  S.muzzle=0.08; // 枪口火光
   if(SAVE.weapon==='blade'){ fireBlade(); return; }
   const n=(SAVE.weapon==='gun')?(1+S.keys.multi):1;
   const k1=Math.min(3,n);
@@ -479,8 +527,9 @@ function fireBlade(){ // 砍刀：近距离扇形挥砍，群伤1，攻速快
   if(hit){ AudioSys.sfx('hit'); S.shake=Math.max(S.shake||0,2);
     for(const e2 of S.enemies){ if(e2.hitT>=0.09&&dist(e2,S)<R+20&&!e2.dead){ // 命中火花
       S.parts.push({ring:true,x:e2.x,y:e2.y,r:0,max:20,life:0.2,maxlife:0.2,color:'#ffe9b8'}); } } }
-  S.parts.push({slash:true,x:S.px,y:S.py,a:a0,r:R,arc,life:0.24,maxlife:0.24}); // 挥砍弧光（更亮更久）
-  S.parts.push({slash:true,x:S.px,y:S.py,a:a0,r:R*0.6,arc:arc*0.8,life:0.16,maxlife:0.16}); // 内层余辉
+  S.parts.push({slash:true,sweep:true,x:S.px,y:S.py,a:a0,r:R,arc,life:0.22,maxlife:0.22}); // 扫过式挥砍弧光
+  S.parts.push({slash:true,sweep:true,x:S.px,y:S.py,a:a0,r:R*0.62,arc:arc*0.85,life:0.16,maxlife:0.16}); // 内层余辉
+  S.swing=0.18; // 挥刀动作
 }
 function launchVolley(m){
   const isR=SAVE.weapon==='rocket';
@@ -525,6 +574,9 @@ function doNova(){
 }
 function killEnemy(e){
   e.dead=true; S.kills++;
+  if(SAVE.daily){ SAVE.daily.kills++; persist(); }
+  if(!SAVE.stats) SAVE.stats={kills:0,best:0,maxLv:0};
+  SAVE.stats.kills++;
   // 连杀播报（手感/成就感）
   if([10,25,50,100,200].indexOf(S.kills)>=0){ S.texts.push({txt:'🔥 连杀 x'+S.kills+'！', life:1.5}); AudioSys.sfx('lvl'); }
   else AudioSys.sfx('kill');
@@ -547,12 +599,15 @@ function killEnemy(e){
   }
   if(e.type==='boss'){
     S.bossCount--;
-    if(e.gen<2 && e.bossType!=='qq' && e.bossType!=='pun' && e.bossType!=='necro'){ spawnBossChild(e.x,e.y,e.gen+1,e.maxhp,e); spawnBossChild(e.x,e.y,e.gen+1,e.maxhp,e); }
+    if(e.gen<2 && !S.rushMode && e.bossType!=='qq' && e.bossType!=='pun' && e.bossType!=='necro'){ spawnBossChild(e.x,e.y,e.gen+1,e.maxhp,e); spawnBossChild(e.x,e.y,e.gen+1,e.maxhp,e); } // Rush不分裂, 保证波次能结束
     if(S.bossCount===0){
-      S.nextBossAt=S.t+120;
+      if(S.rushMode){
+        S.rushN++; S.nextBossAt=S.t+3;
+        S.texts.push({txt:'😈 第 '+S.rushN+' 波 Boss 3秒后到来！更强了！', life:2.5});
+      } else S.nextBossAt=S.t+120;
       S.texts.push({txt:'💥 BOSS 爆炸！清场！', life:2.5});
       S.stopT=0.5; // 击杀慢动作（手感）
-      setTimeout(()=>{ if(S&&!S.over&&!S.choosing) levelComplete(); }, 1200);
+      if(!S.rushMode) setTimeout(()=>{ if(S&&!S.over&&!S.choosing) levelComplete(); }, 1200); // Rush模式不结算, 无限波次
       S.shake=10; S.redT=0.15;
       S.parts.push({ring:true,x:e.x,y:e.y,r:0,max:Math.max(WW,WH),life:0.7,maxlife:0.7});
       for(const o of S.enemies){ if(o.type!=='boss'&&!o.dead){ o.dead=true; S.kills++;
@@ -677,7 +732,7 @@ function update(dt){
   S.camy=Math.max(0,Math.min(WH-H,S.py-H/2));
 
   // auto fire
-  S.fireT+=dt;
+  S.fireT+=dt; S.muzzle=Math.max(0,(S.muzzle||0)-dt); S.swing=Math.max(0,(S.swing||0)-dt);
   if(S.fireT>=1/(fireRate()*weaponFireMul())){ S.fireT=0; fire(); }
 
   if(S.keys.orbit) S.orbitA+=dt*2.2;
@@ -729,8 +784,12 @@ function update(dt){
         hitFx(e);
         if((b.rocket||S.keys.blast)&&!b._ex){ // 爆破弹/火箭筒：命中爆炸，溅射周围
           b._ex=true; const lvlR=b.rocket?(S.keys.rktr||0):(S.keys.blast||0);
-          const br=b.rocket?40*(1+0.15*lvlR):30+12*lvlR, bd2=playerDmg()*(b.rocket?0.8:(0.5+0.25*lvlR));
-          S.parts.push({ring:true,x:e.x,y:e.y,r:0,max:br,life:0.25,maxlife:0.25});
+          const br=b.rocket?55*(1+0.15*lvlR):30+12*lvlR, bd2=playerDmg()*(b.rocket?1.15:(0.5+0.25*lvlR));
+          S.parts.push({ring:true,x:e.x,y:e.y,r:0,max:br,life:0.3,maxlife:0.3,color:'#ff9a3c'});
+          S.parts.push({ring:true,x:e.x,y:e.y,r:0,max:br*0.6,life:0.18,maxlife:0.18,color:'#ffe27a'});
+          S.parts.push({flash:true,x:e.x,y:e.y,r:br*0.55,life:0.1,maxlife:0.1});
+          for(let k=0;k<8;k++){ const fa=rand(0,6.28), fr=rand(br*0.5,br*1.1);
+            S.parts.push({x:e.x+Math.cos(fa)*8,y:e.y+Math.sin(fa)*8,vx:Math.cos(fa)*fr*3.2,vy:Math.sin(fa)*fr*3.2,life:0.35,color:k%2?'#ffb428':'#ff7030',r:rand(2,3.5)}); }
           if(b.rocket&&S.keys.fire){ S.fires.push({x:e.x,y:e.y,r:br,life:2.4,tick:0}); } // 烈焰残留
           S.shake=Math.max(S.shake||0,4);
           for(const o of S.enemies){ if(o.dead||o===e)continue; if(dist(o,e)<br){ o.hp-=bd2; o.hitT=0.1; hitFx(o); if(o.hp<=0) killEnemy(o); } }
@@ -926,7 +985,8 @@ function update(dt){
   for(const c of S.coins){
     const d=Math.hypot(c.x-S.px,c.y-S.py);
     if(d<mag*1.2){const l2=d||1; c.x+=(S.px-c.x)/l2*230*dt; c.y+=(S.py-c.y)/l2*230*dt;}
-    if(d<14){c.dead=true; S.coinsRun+=c.v; AudioSys.sfx('coin');}
+    if(d<14){c.dead=true; S.coinsRun+=c.v; AudioSys.sfx('coin');
+      if(SAVE.daily){ SAVE.daily.coins+=c.v; persist(); }}
   }
   S.coins=S.coins.filter(c=>!c.dead);
 
@@ -963,7 +1023,7 @@ function update(dt){
   // Boss 超时 3 分钟离开
   if(S.bossCount>0 && S.t-S.bossSpawnAt>=180){
     S.enemies=S.enemies.filter(e=>e.type!=='boss');
-    S.bossCount=0; S.nextBossAt=S.t+120;
+    S.bossCount=0; S.nextBossAt=S.t+(S.rushMode?3:120);
     S.texts.push({txt:'💨 BOSS 失去兴趣离开了', life:2.5});
   }
 
@@ -976,6 +1036,8 @@ function update(dt){
   xpEl.style.height=Math.min(100,S.xp/S.xpNext*100)+'%';
   xpEl.title='';
   xpNextEl.textContent=Math.ceil(S.xp)+'/'+S.xpNext;
+  if(SAVE.stats && S.kills>SAVE.stats.best) SAVE.stats.best=S.kills;
+  if(SAVE.daily && Math.floor(S.t)>SAVE.daily.secs){ SAVE.daily.secs=Math.floor(S.t); persist(); }
 }
 function openAirshop(){
   S.paused=true; S.airDone=true;
@@ -1082,15 +1144,31 @@ function draw(){
   ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1;
   for(let x=Math.floor(S.camx/40)*40; x<S.camx+W+40; x+=40){ctx.beginPath();ctx.moveTo(x,S.camy);ctx.lineTo(x,S.camy+H);ctx.stroke();}
   for(let y=Math.floor(S.camy/40)*40; y<S.camy+H+40; y+=40){ctx.beginPath();ctx.moveTo(S.camx,y);ctx.lineTo(S.camx+W,y);ctx.stroke();}
+  if(S.decor) for(const d2 of S.decor){ // 地面装饰：草丛/石块/裂纹/小花
+    const sw=Math.sin(S.t*2+d2.ph)*1.5;
+    ctx.save(); ctx.translate(d2.x,d2.y); ctx.scale(d2.s,d2.s);
+    if(d2.t==='grass'){ ctx.strokeStyle='rgba(80,160,90,.5)'; ctx.lineWidth=2; ctx.lineCap='round';
+      for(let k=-1;k<=1;k++){ ctx.beginPath(); ctx.moveTo(k*3,4); ctx.quadraticCurveTo(k*4+sw,-2,k*5+sw,-7); ctx.stroke(); } ctx.lineCap='butt'; }
+    else if(d2.t==='stone'){ ctx.fillStyle='rgba(70,84,110,.55)'; ctx.beginPath();
+      ctx.moveTo(-7,3); ctx.lineTo(-4,-5); ctx.lineTo(3,-6); ctx.lineTo(7,1); ctx.lineTo(4,5); ctx.lineTo(-4,5); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='rgba(120,136,168,.4)'; ctx.fillRect(-4,-5,7,3); }
+    else if(d2.t==='crack'){ ctx.strokeStyle='rgba(20,26,40,.7)'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(-2,-3); ctx.lineTo(3,1); ctx.lineTo(8,-2); ctx.moveTo(-2,-3); ctx.lineTo(-1,4); ctx.stroke(); }
+    else { const fl=Math.sin(S.t*3+d2.ph)>0?'#e8a0c8':'#f2d76a';
+      for(let k=0;k<5;k++){ const a2=k*1.257+d2.rot; ctx.fillStyle=fl; ctx.beginPath(); ctx.arc(Math.cos(a2)*3,Math.sin(a2)*3,2,0,7); ctx.fill(); }
+      ctx.fillStyle='#fff3c0'; ctx.beginPath(); ctx.arc(0,0,1.8,0,7); ctx.fill(); }
+    ctx.restore(); }
   ctx.strokeStyle='#3fa9f5'; ctx.lineWidth=6; ctx.setLineDash([16,10]);
   ctx.strokeRect(3,3,WW-6,WH-6); ctx.setLineDash([]);
   ctx.fillStyle='rgba(63,169,245,.12)';
   ctx.fillRect(0,0,WW,14); ctx.fillRect(0,WH-14,WW,14); ctx.fillRect(0,0,14,WH); ctx.fillRect(WW-14,0,14,WH);
   for(const g of S.gems){
-    const b=Math.sin((S.t+g.ph)*4)*2;
+    const b=Math.sin((S.t+g.ph)*4)*2, gl=0.25+0.15*Math.sin(S.t*5+g.ph);
     ctx.save(); ctx.translate(g.x,g.y+b); ctx.rotate(Math.PI/4);
+    ctx.fillStyle='rgba(76,224,122,'+gl.toFixed(2)+')'; ctx.fillRect(-8,-8,16,16);
     ctx.fillStyle='#4ce07a'; ctx.fillRect(-4,-4,8,8);
     ctx.fillStyle='#b8ffd2'; ctx.fillRect(-4,-4,4,4);
+    ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1; ctx.strokeRect(-4,-4,8,8);
     ctx.restore();
   }
   for(const e of S.enemies){
@@ -1169,10 +1247,43 @@ function draw(){
       ctx.beginPath(); ctx.ellipse(0,-e.r*0.4,e.r*0.85,e.r*0.3,0,ha,ha+5.2); ctx.stroke();
       ctx.fillStyle='#fff'; ctx.fillRect(-2,-e.r*0.55,4,e.r*1.1); ctx.fillRect(-e.r*0.55,-2,e.r*1.1,4);
       ctx.fillStyle='#e87bb0'; ctx.fillRect(-1.2,-e.r*0.45,2.4,e.r*0.9); ctx.fillRect(-e.r*0.45,-1.2,e.r*0.9,2.4);
-    } else if(e.type==='boss'){ // Boss：能量光环+王冠尖刺
+    } else if(e.type==='boss'){ // Boss：按类型专属建模
+      const r=e.r;
       ctx.fillStyle=body; ctx.strokeStyle=dark; ctx.lineWidth=2.5;
-      ctx.beginPath(); ctx.arc(0,0,e.r,0,7); ctx.fill(); ctx.stroke();
-      ctx.fillStyle=dark; ctx.beginPath(); ctx.arc(0,2,e.r,0.4,Math.PI-0.4); ctx.fill();
+      if(e.bossType==='qq'){ // 球球：蓝球+螺旋纹+奶油肚
+        ctx.beginPath(); ctx.arc(0,0,r,0,7); ctx.fill(); ctx.stroke();
+        ctx.fillStyle=hit?'#eee':'rgba(255,255,255,.22)'; ctx.beginPath(); ctx.arc(0,r*0.25,r*0.72,0,7); ctx.fill();
+        ctx.strokeStyle=hit?'#eee':'rgba(255,255,255,.65)'; ctx.lineWidth=2;
+        ctx.beginPath(); for(let a2=0;a2<4.6;a2+=0.2){ const rr=r*0.18+a2*3.2; if(rr<r-3){ const px2=Math.cos(a2+S.t*1.5)*rr, py2=Math.sin(a2+S.t*1.5)*rr; a2===0?ctx.moveTo(px2,py2):ctx.lineTo(px2,py2); } } ctx.stroke();
+        ctx.fillStyle=hit?'#eee':'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(-r*0.3,-r*0.35,r*0.3,0,7); ctx.fill();
+      } else if(e.bossType==='pun'){ // 惩罚者：紫体+白骨面具+悬浮小珠
+        ctx.beginPath(); ctx.arc(0,0,r,0,7); ctx.fill(); ctx.stroke();
+        ctx.fillStyle=hit?'#eee':'#e8e2f2'; ctx.beginPath(); ctx.arc(0,-r*0.12,r*0.62,0,7); ctx.fill();
+        ctx.fillStyle='#2a1a3a'; ctx.beginPath(); ctx.arc(-r*0.24,-r*0.22,r*0.16,0,7); ctx.arc(r*0.24,-r*0.22,r*0.16,0,7); ctx.fill();
+        ctx.fillStyle=rage?'#ff3030':'#6f3aa0';
+        ctx.beginPath(); ctx.arc(-r*0.24,-r*0.22,r*0.07,0,7); ctx.arc(r*0.24,-r*0.22,r*0.07,0,7); ctx.fill();
+        ctx.strokeStyle='#2a1a3a'; ctx.lineWidth=1.5;
+        for(let k=-2;k<=2;k++){ ctx.beginPath(); ctx.moveTo(k*r*0.18,r*0.16); ctx.lineTo(k*r*0.18,r*0.34); ctx.stroke(); }
+        for(let k=0;k<3;k++){ const a2=S.t*1.2+k*2.1;
+          ctx.fillStyle=hit?'#eee':'rgba(200,160,255,.75)';
+          ctx.beginPath(); ctx.arc(Math.cos(a2)*(r+9),Math.sin(a2)*(r+9),3.5,0,7); ctx.fill(); }
+      } else if(e.bossType==='necro'){ // 死灵领主：斗篷+绿焰眼+符文环
+        ctx.beginPath(); ctx.moveTo(0,-r-4); ctx.quadraticCurveTo(r+6,-r*0.3,r*0.8,r+4); ctx.lineTo(-r*0.8,r+4); ctx.quadraticCurveTo(-r-6,-r*0.3,0,-r-4); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle=hit?'#eee':'#2a1e46'; ctx.beginPath(); ctx.arc(0,-r*0.25,r*0.55,0,7); ctx.fill();
+        ctx.fillStyle='#7dff9e'; ctx.shadowColor='#7dff9e'; ctx.shadowBlur=6;
+        ctx.beginPath(); ctx.arc(-r*0.2,-r*0.28,r*0.1,0,7); ctx.arc(r*0.2,-r*0.28,r*0.1,0,7); ctx.fill(); ctx.shadowBlur=0;
+        ctx.strokeStyle=hit?'#eee':'rgba(150,110,255,.6)'; ctx.lineWidth=2; ctx.setLineDash([6,8]);
+        ctx.save(); ctx.rotate(S.t*0.8); ctx.beginPath(); ctx.arc(0,0,r+7,0,7); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+        ctx.fillStyle='#1a1230'; ctx.beginPath(); ctx.arc(0,r*0.45,r*0.5,0,Math.PI); ctx.fill();
+      } else { // 史莱姆王：圆体+金王冠+大高光+嘴
+        ctx.beginPath(); ctx.arc(0,0,r,0,7); ctx.fill(); ctx.stroke();
+        ctx.fillStyle=hit?'#eee':'rgba(255,255,255,.3)'; ctx.beginPath(); ctx.arc(-r*0.32,-r*0.32,r*0.38,0,7); ctx.fill();
+        ctx.fillStyle=hit?'#eee':'#ffd76a'; ctx.strokeStyle='#b8860e'; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.moveTo(-r*0.42,-r*0.75); ctx.lineTo(-r*0.42,-r-2); ctx.lineTo(-r*0.2,-r*0.85); ctx.lineTo(0,-r-5); ctx.lineTo(r*0.2,-r*0.85); ctx.lineTo(r*0.42,-r-2); ctx.lineTo(r*0.42,-r*0.75); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle='#a02048'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(0,r*0.3,r*0.32,0.3,Math.PI-0.3); ctx.stroke();
+      }
+      ctx.fillStyle=dark; ctx.beginPath(); ctx.arc(0,2,r,0.4,Math.PI-0.4); ctx.fill();
       ctx.save();
       for(let k=0;k<6;k++){ const a2=k*Math.PI/3+S.t*0.5;
         ctx.rotate(Math.PI/3); ctx.fillStyle=rage?'#ff6060':'rgba(255,255,255,.5)';
@@ -1312,6 +1423,15 @@ function draw(){
       ctx.strokeStyle='rgba(255,255,255,'+(a2*0.8).toFixed(2)+')'; ctx.lineWidth=4;
       ctx.beginPath(); ctx.arc(p.x,p.y,p.r*0.92,p.a-p.arc/2,p.a+p.arc/2); ctx.stroke();
       ctx.shadowBlur=0; ctx.lineWidth=1; ctx.lineCap='butt'; }
+    else if(p.flash){ const a2=Math.max(0,p.life/p.maxlife);
+      ctx.fillStyle='rgba(255,255,240,'+(a2*0.85).toFixed(2)+')'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*(1.2-a2*0.4),0,7); ctx.fill(); }
+    else if(p.slash&&p.sweep){ const prog=1-Math.max(0,p.life/p.maxlife); // 扫过式挥砍：从一侧扫到另一侧
+      const a1=p.a-p.arc/2, cur=a1+p.arc*prog, span=Math.min(p.arc,p.arc*Math.max(0.12,prog*1.15));
+      ctx.strokeStyle='rgba(255,233,184,'+(0.9*Math.max(0.15,1-prog*0.7)).toFixed(2)+')'; ctx.lineWidth=14; ctx.lineCap='round';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,cur-span,cur); ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,'+(0.85*Math.max(0.1,1-prog*0.75)).toFixed(2)+')'; ctx.lineWidth=5;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,cur-span,cur); ctx.stroke();
+      ctx.lineWidth=1; ctx.lineCap='butt'; }
     else if(p.ring){ const c2=p.color||'#ffd76a', a2=Math.max(0,p.life/p.maxlife);
       ctx.strokeStyle='rgba('+parseInt(c2.slice(1,3),16)+','+parseInt(c2.slice(3,5),16)+','+parseInt(c2.slice(5,7),16)+','+a2+')';
       ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.stroke(); }
@@ -1355,7 +1475,7 @@ function draw(){
     }
   }
   ctx.font='bold 11px monospace'; ctx.textAlign='left';
-  if(S.dbg){ ctx.fillStyle='#7fff9f'; const d=S.dbg; ctx.fillText('V35 \u00b7 FPS '+d.fps+' \u602a'+d.n+' \u5f39'+d.b+' \u654c\u5f39'+d.eb+' \u5f39\u8ba1'+d.bt, 8, H-8); }
+  if(S.dbg){ ctx.fillStyle='#7fff9f'; const d=S.dbg; ctx.fillText('V39 \u00b7 FPS '+d.fps+' \u602a'+d.n+' \u5f39'+d.b+' \u654c\u5f39'+d.eb+' \u5f39\u8ba1'+d.bt, 8, H-8); }
   if(S.redT>0){
     const a2=S.redT/0.2*0.45;
     const g2=ctx.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*0.75);
@@ -1380,11 +1500,20 @@ function drawHero(){
   ctx.fillRect(1,4+Math.max(0,-leg),5,9-Math.max(0,-leg));
   ctx.fillStyle=blink?'#ff8a8a':'#4a7fce'; ctx.fillRect(-7,-4,14,10);
   ctx.fillStyle='#5f93d9'; ctx.fillRect(-7,-4,14,4);
+  ctx.fillStyle='#2e4a78'; ctx.fillRect(-7,2,14,1.5); // 腰带
+  ctx.fillStyle='#ffd76a'; ctx.fillRect(-1.5,2,3,1.5); // 扣
   ctx.fillStyle='#f2c99a'; ctx.fillRect(-5,-13,10,9);
+  ctx.fillStyle='#e8b070'; ctx.fillRect(-5,-6,10,1); // 下巴阴影
+  ctx.fillStyle='#7a4a22'; ctx.fillRect(-5,-14,10,2); ctx.fillRect(-6,-13,2,4); ctx.fillRect(4,-13,2,4); // 发际线
+  ctx.fillStyle='#8a5a30'; ctx.fillRect(-11,-3,4,7); // 背包
+  ctx.fillStyle='#a8723e'; ctx.fillRect(-11,-3,4,2);
   const ex=Math.cos(aim)*2, ey=Math.sin(aim)*1.5;
   ctx.fillStyle='#222';
   ctx.fillRect(-3+ex,-10+ey,2,2); ctx.fillRect(1+ex,-10+ey,2,2);
   ctx.fillStyle='#d64545'; ctx.fillRect(-6,-15,12,4); ctx.fillRect(2,-13,7,2);
+  ctx.fillStyle='#a02020'; ctx.fillRect(-6,-12,12,1); // 帽檐阴影
+  const sw2=Math.sin(S.walkT*7)*2; // 围巾飘带
+  ctx.fillStyle='#e05a5a'; ctx.fillRect(-10,-6+sw2*0.5,6,3); ctx.fillRect(-14,-5+sw2,5,3);
   ctx.save(); ctx.rotate(aim);
   if(SAVE.weapon==='rocket'){ // 🚀 火箭筒建模
     ctx.fillStyle='#5c6b52'; ctx.fillRect(3,-4.5,21,9);      // 筒身
@@ -1392,8 +1521,9 @@ function drawHero(){
     ctx.fillStyle='#2f382b'; ctx.fillRect(22,-6,5,12);       // 炮口
     ctx.fillStyle='#d05a3e'; ctx.fillRect(10,-5.5,6,3);      // 警示条
     ctx.fillStyle='#6b4a2f'; ctx.fillRect(8,4,4,6);          // 握把
-  } else if(SAVE.weapon==='blade'){ // 🗡️ 砍刀建模
-    ctx.rotate(0.55);                                        // 抬臂持刀
+  } else if(SAVE.weapon==='blade'){ // 🗡️ 砍刀建模（挥刀动作：从抬起劈下）
+    const sp2=(S.swing||0)>0 ? 1-(S.swing/0.18) : 1; // 0抬起→1劈下
+    ctx.rotate(-0.4+sp2*1.35);
     ctx.fillStyle='#6b4a2f'; ctx.fillRect(6,-1.5,7,3);       // 刀柄
     ctx.fillStyle='#dfe9f2'; ctx.beginPath();
     ctx.moveTo(13,-2.5); ctx.lineTo(30,-2); ctx.lineTo(34,1.5); ctx.lineTo(13,2.5); ctx.closePath(); ctx.fill(); // 刀刃
@@ -1402,6 +1532,13 @@ function drawHero(){
   } else { // 🔫 手枪建模
     ctx.fillStyle='#454c5c'; ctx.fillRect(6,-2,12,4);
     ctx.fillStyle='#2f3440'; ctx.fillRect(4,-3,5,6);
+    ctx.fillStyle='#ffd76a'; ctx.fillRect(16,-1.5,2,3); // 准星
+  }
+  if(S.muzzle>0&&!blink){ // 枪口火光
+    ctx.fillStyle='rgba(255,220,110,.9)';
+    const mx=SAVE.weapon==='rocket'?27:SAVE.weapon==='blade'?0:18;
+    if(SAVE.weapon!=='blade'){ ctx.beginPath(); ctx.arc(mx,0,5+Math.random()*2,0,7); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.95)'; ctx.beginPath(); ctx.arc(mx,0,2.5,0,7); ctx.fill(); }
   }
   ctx.restore();
   ctx.restore();
@@ -1411,13 +1548,13 @@ function drawHero(){
 
 // ---------- home / shop / level flow ----------
 // ---------- page router (unified) ----------
-let page='home', pickMade=false, testBoss=null;
+let page='home', pickMade=false, testBoss=null, rushOn=false;
 const PAGES={
   home:{
     title:'像素幸存者',
     text:()=>'<b>💰 '+SAVE.coins+'</b> 金币　·　已解锁第 '+SAVE.unlocked+' 关<br><br>怪物从暗处围来，小人自动开枪。杀怪掉经验升级、25% 概率爆金币。<br>击败 Boss 全家通关！WASD/拖动移动 · Esc 暂停',
     nav:{shop:'🛒 商店', play:'▶ 开始战斗', playGo:'select'},
-    render(){ showHomeLevels(); }
+    render(){ showHomeLevels(); buildDaily(); }
   },
   select:{
     title:'选择关卡',
@@ -1470,8 +1607,99 @@ function showPage(name){
     } else showPage(P.nav.playGo);
   };
 }
+function buildDaily(){
+  if(OFFLINE_GIFT>0){
+    const c=document.createElement('div'); c.id='offlineCard'; c.className='card';
+    c.style.cssText='width:min(340px,88%); text-align:left;';
+    c.innerHTML='<div class="ic">💤</div><div class="nm">离线收益</div><div class="ds">你离开的这段时间，小人帮你打工赚了 <b style="color:#ffd76a">'+OFFLINE_GIFT+'</b> 金币！</div><div class="lv"><button class="mini">✅ 领取 '+OFFLINE_GIFT+'</button>　<button class="mini ad">📺 领双倍 '+(OFFLINE_GIFT*2)+'</button></div>';
+    const [bn,ba]=c.querySelectorAll('button');
+    bn.style.cssText='font-size:12px; padding:6px 10px; letter-spacing:0;';
+    ba.style.cssText=bn.style.cssText+'; background:linear-gradient(180deg,#7fe0ff,#3a9fe0);';
+    bn.onclick=()=>{ SAVE.coins+=OFFLINE_GIFT; persist(); coinEl.textContent=SAVE.coins; c.remove(); };
+    ba.onclick=()=>AdKit.showRewarded(()=>{ SAVE.coins+=OFFLINE_GIFT*2; persist(); coinEl.textContent=SAVE.coins; c.remove(); });
+    ch.appendChild(c);
+  }
+  ensureDaily();
+  const wrap=document.createElement('div'); wrap.id='dailyPanel';
+  wrap.style.cssText='width:min(340px,88%); text-align:left; font-size:12px; background:linear-gradient(180deg,rgba(36,54,94,.85),rgba(27,42,74,.85)); border:1.5px solid rgba(255,255,255,.14); border-radius:14px; padding:10px 12px; position:relative;';
+  wrap.innerHTML='<b style="color:#ffd76a;">📋 每日任务</b> <span style="color:#7285a8; font-size:10px;">每天 0 点刷新</span>';
+  DAILY_TASKS.forEach((t,i)=>{
+    const cur=SAVE.daily[t.id]||0, done=cur>=t.need, claimed=SAVE.daily.claimed[i];
+    const row=document.createElement('div');
+    row.style.cssText='display:flex; align-items:center; gap:8px; margin-top:6px;';
+    const prog=done?'✅':Math.min(cur,t.need)+'/'+t.need;
+    row.innerHTML='<span>'+t.ic+'</span><span style="flex:1; color:#cfdcff;">'+t.nm+' <span style="color:'+(done?'#7fd17f':'#8fa3c8')+';">'+prog+'</span></span>';
+    const b=document.createElement('button');
+    if(claimed){ b.textContent='✅ 已领'; b.style.cssText='font-size:11px; padding:4px 8px; background:#2a3a5e; color:#6a7590; box-shadow:none;'; }
+    else if(done){
+      b.textContent='📺 领'+t.r*2; b.style.cssText='font-size:11px; padding:4px 8px; letter-spacing:0; background:linear-gradient(180deg,#7fe0ff,#3a9fe0); box-shadow:0 2px 0 #1f6fa8;';
+      b.onclick=()=>AdKit.showRewarded(()=>{ SAVE.daily.claimed[i]=true; SAVE.coins+=t.r*2; persist(); coinEl.textContent=SAVE.coins; showPage('home'); });
+      const b2=document.createElement('button'); b2.textContent='领'+t.r;
+      b2.style.cssText='font-size:11px; padding:4px 8px;';
+      b2.onclick=()=>{ SAVE.daily.claimed[i]=true; SAVE.coins+=t.r; persist(); coinEl.textContent=SAVE.coins; showPage('home'); };
+      row.appendChild(b); row.appendChild(b2);
+    } else { b.textContent=prog; b.style.cssText='font-size:11px; padding:4px 8px; background:#2a3a5e; color:#6a7590; box-shadow:none;'; }
+    row.appendChild(b);
+    wrap.appendChild(row);
+  });
+  ch.appendChild(wrap);
+  // 成就面板
+  if(!SAVE.ach) SAVE.ach={};
+  const st=achStats();
+  const aw=document.createElement('div'); aw.id='achPanel';
+  aw.style.cssText=wrap.style.cssText;
+  aw.innerHTML='<b style="color:#ffd76a;">🏆 成就</b> <span style="color:#7285a8; font-size:10px;">一次性奖励</span>';
+  ACHIEVEMENTS.forEach(t=>{
+    const done=t.test(st), claimed=SAVE.ach[t.id];
+    const row=document.createElement('div');
+    row.style.cssText='display:flex; align-items:center; gap:8px; margin-top:6px;';
+    row.innerHTML='<span>'+t.ic+'</span><span style="flex:1; color:#cfdcff;">'+t.nm+' <span style="color:'+(done?'#7fd17f':'#8fa3c8')+';">'+(claimed?'✅':'💰'+t.r)+'</span></span>';
+    const b=document.createElement('button');
+    if(claimed){ b.textContent='✅'; b.style.cssText='font-size:11px; padding:4px 8px; background:#2a3a5e; color:#6a7590; box-shadow:none;'; }
+    else if(done){
+      b.textContent='📺 领'+t.r*2; b.style.cssText='font-size:11px; padding:4px 8px; letter-spacing:0; background:linear-gradient(180deg,#7fe0ff,#3a9fe0); box-shadow:0 2px 0 #1f6fa8;';
+      b.onclick=()=>AdKit.showRewarded(()=>{ SAVE.ach[t.id]=true; SAVE.coins+=t.r*2; persist(); coinEl.textContent=SAVE.coins; showPage('home'); });
+      const b2=document.createElement('button'); b2.textContent='领'+t.r;
+      b2.style.cssText='font-size:11px; padding:4px 8px;';
+      b2.onclick=()=>{ SAVE.ach[t.id]=true; SAVE.coins+=t.r; persist(); coinEl.textContent=SAVE.coins; showPage('home'); };
+      row.appendChild(b); row.appendChild(b2);
+    } else { b.textContent='🔒'; b.style.cssText='font-size:11px; padding:4px 8px; background:#2a3a5e; color:#6a7590; box-shadow:none;'; }
+    row.appendChild(b);
+    aw.appendChild(row);
+  });
+  ch.appendChild(aw);
+  // Boss Rush 入口
+  if(!SAVE.rush||SAVE.rush.date!==todayStr()) SAVE.rush={date:todayStr(),used:0};
+  const used=SAVE.rush.used||0, adLeft=Math.max(0,3-used);
+  const rb=document.createElement('button');
+  rb.textContent='😈 Boss Rush · '+(used===0?'免费挑战 1 次':'📺 广告进入（今日剩 '+adLeft+' 次）');
+  rb.style.cssText='border-color:#e0609b; color:#ff9dc4; width:min(340px,88%);';
+  rb.onclick=()=>{
+    if(used===0){ SAVE.rush.used=1; persist(); startRush(); }
+    else if(adLeft>0){ AdKit.showRewarded(()=>{ SAVE.rush.used=used+1; persist(); startRush(); }); }
+    else { ovT.textContent='⚠️ 今日 Rush 次数已用完（3次）'; setTimeout(()=>ovT.textContent='像素幸存者',1200); }
+  };
+  ch.appendChild(rb);
+  // 战绩面板
+  const sb=document.createElement('button'); sb.textContent='📊 我的战绩';
+  sb.style.cssText='width:min(340px,88%); background:linear-gradient(180deg,#3a5a9e,#27406e); color:#cfe0ff; box-shadow:0 3px 0 #16244a;';
+  sb.onclick=()=>{
+    const st=SAVE.stats||{kills:0,best:0,maxLv:0};
+    ovT.textContent='📊 我的战绩';
+    ovX.innerHTML='💀 累计击杀：<b>'+st.kills+'</b><br>🌟 单局最高击杀：<b>'+st.best+'</b><br>👑 最高通关：<b>'+(st.maxLv?'第'+st.maxLv+'关':'未通关')+'</b><br>📺 今日广告次数：'+(SAVE.adToday||0)+'/5<br>📅 连续签到：<b>'+(SAVE.signStreak||0)+'</b> 天';
+    ch.innerHTML='';
+    const back=document.createElement('button'); back.textContent='返回'; back.onclick=()=>showPage('home'); ch.appendChild(back);
+    ov.classList.remove('hidden');
+  };
+  ch.appendChild(sb);
+}
 function showHomeLevels(){
   const list=document.createElement('div'); list.id='lvlist';
+  if(SAVE.tut>=1&&SAVE.tut<=3){ const sk=document.createElement('button'); // 教程可跳过, 防死锁
+    sk.textContent='⏭ 跳过教程（老玩家直接开玩）';
+    sk.style.cssText='font-size:12px; width:min(340px,88%); background:#2a3a5e; color:#9fb4dd; box-shadow:0 2px 0 #16244a;';
+    sk.onclick=()=>{ SAVE.tut=4; persist(); Spot.hide(); showPage('home'); };
+    ch.appendChild(sk); }
   // ---- 聚光灯指引 ----
   if(SAVE.tut===1){ Spot.show([navShop],'第一步：点击进入「商店」');
     const t=document.createElement('p');
@@ -1537,6 +1765,11 @@ function pickRows(){ // 选关页顶部：角色 / 武器选择（点一下看�
   mk('🔫 武器',[{id:'gun',nm:'手枪',ic:'🔫'},{id:'rocket',nm:'火箭筒',ic:'🚀'},{id:'blade',nm:'砍刀',ic:'🗡️'}],'weapon');
   wrap.appendChild(detail);
   ch.appendChild(wrap);
+  if(SAVE.tut>=1&&SAVE.tut<=3){ const sk=document.createElement('button');
+    sk.textContent='⏭ 跳过教程';
+    sk.style.cssText='font-size:12px; width:min(340px,88%); background:#2a3a5e; color:#9fb4dd; box-shadow:0 2px 0 #16244a;';
+    sk.onclick=()=>{ SAVE.tut=4; persist(); Spot.hide(); showPage('select'); };
+    ch.appendChild(sk); }
 }
 function renderLevelList(){
   const list=document.createElement('div'); list.id='lvlist';
@@ -1665,7 +1898,8 @@ function renderShop(){
   if(SAVE.tut===1){ const cards=ch.querySelectorAll('.card'); if(cards[1]) Spot.show([cards[1]],'点击购买「装甲强化 ❤️」'); }
 }
 
-function startLevel(){ testBoss=null; nav.classList.add('hidden'); startGame(); }
+function startLevel(){ testBoss=null; rushOn=false; nav.classList.add('hidden'); startGame(); }
+function startRush(){ testBoss=null; rushOn=true; nav.classList.add('hidden'); startGame(); }
 function startTest(){ nav.classList.add('hidden'); startGame(); }
 function levelComplete(){
   if(!S) return; // Boss死亡后的延迟回调时可能已退出，防崩溃
@@ -1681,6 +1915,8 @@ function levelComplete(){
   } nav.classList.add('hidden');
   SAVE.coins+=S.coinsRun+250; // 通关奖励+额外250
   SAVE.unlocked=Math.max(SAVE.unlocked, Math.min(selLevel+1,5));
+  if(!SAVE.stats) SAVE.stats={kills:0,best:0,maxLv:0};
+  SAVE.stats.maxLv=Math.max(SAVE.stats.maxLv, selLevel);
   SAVE.defense[selLevel]=[]; persist(); // 每关结束清空场上道具
   showPageHome=()=>showPage('home');
   ovT.textContent='🏆 第'+selLevel+'关 通关！';
