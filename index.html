@@ -238,26 +238,8 @@ const AdKit={
       ch2.innerHTML=''; while(snapCh.firstChild) ch2.appendChild(snapCh.firstChild);
       ov2.classList.remove('hidden','menu'); };
     ov2.classList.remove('hidden','menu');
-    let t=15;
-    ovT2.textContent='📺 广告播放中…';
-    ovX2.innerHTML='🎬 模拟激励视频 <b style="font-size:22px">'+t+'</b> 秒<br><span style="font-size:11px;color:#7285a8">今日剩余 '+(5-(SAVE.adToday||0))+' 个广告 · 上线时替换为官方广告SDK</span>';
-    ch2.innerHTML='';
-    const skip=document.createElement('button');
-    skip.textContent='⏭ 放弃（无奖励）'; skip.style.background='#888'; skip.style.color='#fff';
-    skip.onclick=()=>{ clearInterval(iv); ch2.innerHTML=''; restore(); if(S&&!S.over)S.paused=!!wasPaused; onSkip&&onSkip(); };
-    ch2.appendChild(skip);
-    const iv=setInterval(()=>{ t--;
-      ovX2.innerHTML='🎬 模拟激励视频 <b style="font-size:22px">'+t+'</b> 秒<br><span style="font-size:11px;color:#7285a8">今日剩余 '+(5-(SAVE.adToday||0))+' 个广告 · 上线时替换为官方广告SDK</span>';
-      if(t<=0){
-        clearInterval(iv);
-        ovT2.textContent='✅ 广告观看完成';
-        ovX2.innerHTML='奖励已解锁！';
-        skip.remove();
-        const ok=document.createElement('button'); ok.textContent='🎁 领取奖励';
-        ok.onclick=()=>{ clearInterval(iv); ch2.innerHTML=''; restore(); if(S&&!S.over)S.paused=!!wasPaused; onReward(); };
-        ch2.appendChild(ok);
-      }
-    },1000);
+    // ---- 暂时跳过15秒模拟广告：立即发放奖励（上线时换回官方广告SDK） ----
+    ch2.innerHTML=''; restore(); if(S&&!S.over)S.paused=!!wasPaused; onReward();
   }
 };
 // ---- 每日签到（留存钩子） ----
@@ -402,7 +384,7 @@ function startGame(){
      keys:{dmg:0,rate:0,multi:0,pierce:0,spd:0,hp:0,magnet:0,orbit:0,nova:0,regen:0,crit:0,xp:0,tdmg:0,trate:0,homing:0,blast:0,shield:0,thorn:0,wind:0},
      dashCd:0, dashing:0, dashInv:0, dashA:0, shieldT:0, thornT:0, volleyPending:0, volleyT:0, skillCd:0, uberT:0,
      bullets:[], enemies:[], gems:[], parts:[], novaT:0, orbitA:0, fireT:0.6, hurtT:0, fires:[],
-     bossCount:0, bossSpawnAt:0, paused:false, dnums:[], nextBossAt:120, over:false, choosing:false, revived:false, texts:[], aimA:0, walkT:0, defs:(SAVE.defense[selLevel]||[]).map(d=>({id:d.id,x:d.x,y:d.y,cd:0,ang:0})), runDmg:1, airDone:rushOn};
+     bossCount:0, bossSpawnAt:0, paused:false, dnums:[], nextBossAt:120, over:false, choosing:false, revived:false, texts:[], aimA:0, walkT:0, defs:(SAVE.defense[selLevel]||[]).map(d=>({id:d.id,x:d.x,y:d.y,cd:0,ang:0})), runDmg:1, airDone:rushOn, refreshed:false};
   S.decor=(()=>{ const a=[]; for(let i=0;i<64;i++){ const k=Math.random();
     a.push({t:k<0.5?'grass':k<0.75?'stone':k<0.9?'crack':'flower', x:rand(20,WW-20), y:rand(20,WH-20), s:rand(0.7,1.3), rot:rand(0,6.28), ph:rand(0,6)}); } return a; })();
      ov.classList.add('hidden'); ov.classList.remove('menu'); ch.innerHTML=''; pauseBtn.classList.remove('hidden'); dashBtn.classList.remove('hidden');
@@ -651,6 +633,19 @@ function levelUp(){
     ch.appendChild(c);
   }
   ovT.textContent='LEVEL UP!';
+  if(!S.refreshed){ // 金币刷新卡牌：10金币一次，每次三选一最多一次
+    const rb=document.createElement('button');
+    const wallet=SAVE.coins+S.coinsRun;
+    rb.textContent='🔄 刷新卡牌（💰 10 · 本局限1次）'+(wallet<10?'（金币不足）':'');
+    rb.style.cssText='font-size:12px; padding:7px 14px; margin:8px auto 0; display:block;'+(wallet<10?'opacity:.5;':'');
+    rb.onclick=()=>{
+      if(SAVE.coins+S.coinsRun<10){ ovT.textContent='⚠️ 金币不足（需要 10）'; setTimeout(()=>{ovT.textContent='LEVEL UP!';},900); return; }
+      const fromRun=Math.min(S.coinsRun,10); S.coinsRun-=fromRun; SAVE.coins-=10-fromRun; persist();
+      S.refreshed=true; S.choosing=false; ch.innerHTML=''; ov.classList.add('hidden');
+      coinEl.textContent=SAVE.coins+S.coinsRun;
+      levelUp(); };
+    ch.appendChild(rb);
+  }
   ov.classList.remove('hidden'); ov.classList.remove('menu');
 }
 
@@ -1455,23 +1450,37 @@ function draw(){
       ctx.shadowBlur=0; ctx.lineWidth=1; ctx.lineCap='butt'; }
     else if(p.flash){ const a2=Math.max(0,p.life/p.maxlife);
       ctx.fillStyle='rgba(255,255,240,'+(a2*0.85).toFixed(2)+')'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*(1.2-a2*0.4),0,7); ctx.fill(); }
-    else if(p.slash&&p.sweep){ const prog=1-Math.max(0,p.life/p.maxlife); // 新月形刀光：外弧+内弧闭合填充, 冷白蓝配色
+    else if(p.slash&&p.sweep){ const prog=1-Math.max(0,p.life/p.maxlife); // 新月形刀光：发光扫掠+双重残影+金色锋线
       const a1=p.a-p.arc/2, cur=a1+p.arc*prog, span=Math.min(p.arc,p.arc*Math.max(0.15,prog*1.12));
-      const fade=Math.max(0,1-prog*0.75);
+      const fade=Math.max(0,1-prog*0.7);
+      // 残影拖尾（两道更早的弧，透明度递减）
+      for(let k=1;k<=2;k++){ const tp=prog-0.13*k;
+        if(tp<=0)continue; const tc=a1+p.arc*tp, ts=Math.min(p.arc,p.arc*Math.max(0.15,tp*1.12));
+        ctx.strokeStyle='rgba(150,190,255,'+(0.22*fade/k).toFixed(2)+')'; ctx.lineWidth=7-k*2;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r*(1-0.04*k),tc-ts,tc); ctx.stroke(); }
+      // 主新月（冷白蓝填充+发光金边）
+      ctx.shadowColor='rgba(255,226,122,.9)'; ctx.shadowBlur=10;
       ctx.beginPath(); ctx.arc(p.x,p.y,p.r,cur-span,cur); ctx.arc(p.x,p.y,p.r*0.58,cur,cur-span,true); ctx.closePath();
-      ctx.fillStyle='rgba(200,228,255,'+(0.5*fade).toFixed(2)+')'; ctx.fill();
-      ctx.strokeStyle='rgba(255,255,255,'+(0.9*fade).toFixed(2)+')'; ctx.lineWidth=2.5; ctx.stroke();
-      ctx.strokeStyle='rgba(160,200,255,'+(0.5*fade).toFixed(2)+')'; ctx.lineWidth=1;
+      ctx.fillStyle='rgba(210,232,255,'+(0.42*fade).toFixed(2)+')'; ctx.fill();
+      ctx.strokeStyle='rgba(255,226,122,'+(0.85*fade).toFixed(2)+')'; ctx.lineWidth=3; ctx.stroke();
+      ctx.shadowBlur=0;
+      // 内侧光带
+      ctx.strokeStyle='rgba(255,255,255,'+(0.55*fade).toFixed(2)+')'; ctx.lineWidth=1.5;
       ctx.beginPath(); ctx.arc(p.x,p.y,p.r*0.79,cur-span+0.1,cur-0.05); ctx.stroke();
-      const tipA=cur; // 刀尖锐光
-      ctx.strokeStyle='rgba(255,255,255,'+(0.95*fade).toFixed(2)+')'; ctx.lineWidth=3; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(p.x+Math.cos(tipA)*p.r*0.62, p.y+Math.sin(tipA)*p.r*0.62);
-      ctx.lineTo(p.x+Math.cos(tipA)*p.r*1.04, p.y+Math.sin(tipA)*p.r*1.04); ctx.stroke();
-      ctx.lineWidth=1; ctx.lineCap='butt';
-      for(let k=0;k<3;k++){ const ta=cur-span*Math.random(); // 拖尾碎光
-        ctx.fillStyle='rgba(220,238,255,'+(0.5*fade*Math.random()).toFixed(2)+')';
-        const tr=p.r*(0.65+Math.random()*0.35);
-        ctx.fillRect(p.x+Math.cos(ta)*tr-1.5, p.y+Math.sin(ta)*tr-1.5, 3,3); } }
+      // 前锋亮刃（粗、发光、白热）
+      ctx.shadowColor='rgba(255,255,255,1)'; ctx.shadowBlur=12;
+      ctx.strokeStyle='rgba(255,255,255,'+(0.95*fade).toFixed(2)+')'; ctx.lineWidth=4; ctx.lineCap='round';
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,Math.max(cur-span,cur-0.5),cur); ctx.stroke();
+      ctx.shadowBlur=0;
+      // 刀尖锐光 + 火花
+      const tipA=cur;
+      ctx.strokeStyle='rgba(255,246,200,'+(0.95*fade).toFixed(2)+')'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(p.x+Math.cos(tipA)*p.r*0.6, p.y+Math.sin(tipA)*p.r*0.6);
+      ctx.lineTo(p.x+Math.cos(tipA)*p.r*1.06, p.y+Math.sin(tipA)*p.r*1.06); ctx.stroke();
+      for(let k=0;k<3;k++){ const sa=tipA+rand(-0.25,0.25), sr=p.r*rand(0.7,1.1);
+        ctx.fillStyle='rgba(255,226,122,'+(0.7*fade).toFixed(2)+')';
+        ctx.fillRect(p.x+Math.cos(sa)*sr-1.5, p.y+Math.sin(sa)*sr-1.5, 3,3); }
+      ctx.lineWidth=1; ctx.lineCap='butt'; }
     else if(p.ring){ const c2=p.color||'#ffd76a', a2=Math.max(0,p.life/p.maxlife);
       ctx.strokeStyle='rgba('+parseInt(c2.slice(1,3),16)+','+parseInt(c2.slice(3,5),16)+','+parseInt(c2.slice(5,7),16)+','+a2+')';
       ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.stroke(); }
@@ -1617,15 +1626,16 @@ const PAGES={
   reward:{
     title:'🎁 奖励中心',
     text:()=>'金币：<b>'+SAVE.coins+'</b> · 离线收益 / 每日任务 / 成就都在这里',
-    nav:{shop:'🛒 商店', play:'🏠 主页', playGo:'home'},
+    nav:{shop:'🛒 商店', play:'▶ 选择关卡', playGo:'select'},
     render(){ buildDaily(); }
   }
 };
 function showPage(name){
+  const prevPage=page;
   page=name; pickMade=(name==='defend')?pickMade:false; // 布防页保留已选关卡
   Spot.hide(); // 页面切换清除聚光灯（新指引由各页自行点亮）
   AudioSys.stopMusic();
-  if(name==='select') selLevel=Math.min(SAVE.unlocked,5); // 进入选关页默认选中最高解锁关
+  if(name==='select'&&prevPage!=='select'&&!pickMade) selLevel=Math.min(SAVE.unlocked,5); // 仅首次进入默认选最高解锁关；换武器/角色不再跳关
   const P=PAGES[name];
   S=null; cancelAnimationFrame(raf);
   ovT.textContent=typeof P.title==='function'?P.title():P.title;
@@ -1831,7 +1841,7 @@ function renderLevelList(){
     b.textContent=(locked?'🔒 ':'▶ ')+['第一关','第二关','第三关','第四关','第五关'][i-1]+(locked?'':'　难度 ×'+[1,1.6,2.4,3.2,4.2][i-1]);
     if(locked) b.className='locked';
     if(SAVE.tut===2) b.classList.add('tutdim'); // 教程期灰色，不可点
-    if(i===Math.min(SAVE.unlocked,5)) b.className+=' sel';
+    if(i===selLevel) b.className+=' sel';
     if(!locked) b.onclick=()=>{
       selLevel=i; pickMade=true;
       list.querySelectorAll('button').forEach(x=>x.classList.remove('sel'));
