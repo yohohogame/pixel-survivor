@@ -330,14 +330,13 @@ const UPGRADES=[
  {id:'dmg', ic:'⚔️', nm:'利刃', ds:'伤害 +25%', max:8},
  {id:'rate', ic:'⚡', nm:'迅捷', ds:'攻速 +25%', max:8},
  {id:'multi', ic:'🔱', nm:'多重弹', ds:'手枪专属：子弹数 +1（3发一排接力齐射）', max:4, w:'gun'},
- {id:'rktr', ic:'🚀', nm:'火箭增爆', ds:'火箭筒专属：爆炸范围 +15%（满级+75%）', max:5, w:'rocket'},
- {id:'blr', ic:'🗡️', nm:'刀刃扩展', ds:'砍刀专属：挥砍弧度扩大、最远距离 +5%/级（满级覆盖75%圆）', max:5, w:'blade'},
- {id:'pierce', ic:'🎯', nm:'穿透', ds:'子弹穿透 +1', max:4},
- {id:'homing', ic:'🧿', nm:'追踪弹', ds:'子弹会转向追踪敌人', max:3},
- {id:'blast', ic:'🧨', nm:'爆破弹', ds:'命中后爆炸，溅射周围敌人', max:3},
- {id:'shield', ic:'🔵', nm:'能量护盾', ds:'周期性自动抵挡一次伤害', max:3},
- {id:'thorn', ic:'🌵', nm:'荆棘领域', ds:'身边敌人持续受到伤害', max:3},
- {id:'wind', ic:'🌪️', nm:'疾影', ds:'冲刺冷却 -20%', max:3},
+ {id:'pierce', ic:'🎯', nm:'穿透', ds:'手枪专属：子弹穿透 +1', max:4, w:'gun'},
+ {id:'rktr', ic:'🚀', nm:'爆炸范围', ds:'火箭筒专属：爆炸范围 +15%（满级+75%）', max:5, w:'rocket'},
+ {id:'blr', ic:'🗡️', nm:'增加横扫', ds:'砍刀专属：横扫范围 +5%/级、弧度扩大（满级覆盖75%圆）', max:5, w:'blade'},
+ {id:'blast', ic:'🧨', nm:'爆破弹', ds:'手枪专属：命中后爆炸，溅射周围敌人', max:3, w:'gun'},
+ {id:'fire', ic:'🔥', nm:'烈焰残留', ds:'火箭筒专属：爆炸处留下火圈（范围随爆炸范围），每0.4s灼烧0.5×级伤害，持续2.4s', max:5, w:'rocket'},
+ {id:'shrap', ic:'💠', nm:'碎片溅射', ds:'砍刀专属：向砍中的敌人身后溅射125°扇形碎片，伤害0.8×', max:5, w:'blade'},
+ {id:'shield', ic:'🔵', nm:'能量护盾', ds:'周期性自动抵挡一次伤害（冷却20s−3s/级）', max:3},
  {id:'spd', ic:'👟', nm:'疾风步', ds:'移速 +20%（满级 100%）', max:5},
  {id:'hp', ic:'❤️', nm:'坚韧', ds:'最大生命 +2，并回满', max:6},
  {id:'magnet', ic:'🧲', nm:'磁力', ds:'拾取范围 +40%', max:5},
@@ -352,11 +351,12 @@ const UPGRADES=[
 
 function startGame(){
   const mul=[1,1.6,2.4,3.2,4.2][selLevel-1]; // 关卡难度从1开始
+  if(SAVE.tut===3){ SAVE.tut=4; persist(); } // 开战后教程彻底结束：布防页不再重弹出战指引
   S={t:0, test:!!testBoss, kills:0, level:selLevel, mul:mul, coinsRun:0, coins:[], ebullets:[], spawnTimer:1,
      px:W/2, py:H/2, x:W/2, y:H/2, camx:0, camy:0, moving:0, hp:10+SAVE.up.hp-(SAVE.char==='merchant'?2:0), maxhp:10+SAVE.up.hp-(SAVE.char==='merchant'?2:0), lvl:1, xp:0, xpNext:6,
      keys:{dmg:0,rate:0,multi:0,pierce:0,spd:0,hp:0,magnet:0,orbit:0,nova:0,regen:0,crit:0,xp:0,tdmg:0,trate:0,homing:0,blast:0,shield:0,thorn:0,wind:0},
      dashCd:0, dashing:0, dashInv:0, dashA:0, shieldT:0, thornT:0, volleyPending:0, volleyT:0, skillCd:0, uberT:0,
-     bullets:[], enemies:[], gems:[], parts:[], novaT:0, orbitA:0, fireT:0.6, hurtT:0,
+     bullets:[], enemies:[], gems:[], parts:[], novaT:0, orbitA:0, fireT:0.6, hurtT:0, fires:[],
      bossCount:0, bossSpawnAt:0, paused:false, dnums:[], nextBossAt:120, over:false, choosing:false, revived:false, texts:[], aimA:0, walkT:0, defs:(SAVE.defense[selLevel]||[]).map(d=>({id:d.id,x:d.x,y:d.y,cd:0,ang:0})), runDmg:1, airDone:false};
      ov.classList.add('hidden'); ov.classList.remove('menu'); ch.innerHTML=''; pauseBtn.classList.remove('hidden'); dashBtn.classList.remove('hidden');
    cancelAnimationFrame(raf);
@@ -441,7 +441,7 @@ function spawnBossChild(x,y,gen,maxhp,e){
 // ---------- combat ----------
 function playerDmg(){ return (1+0.01*SAVE.up.dmg)*(1+0.25*S.keys.dmg)*(S.runDmg||1)*(SAVE.char==='scholar'?0.9:SAVE.char==='engineer'?0.85:1); }
 function fireRate(){ return 1.4*(1+0.01*SAVE.up.rate)*(1+0.25*S.keys.rate); }
-function weaponFireMul(){ return SAVE.weapon==='rocket'?0.55:SAVE.weapon==='blade'?1.6:1; } // 火箭筒更慢/砍刀更快
+function weaponFireMul(){ return SAVE.weapon==='rocket'?0.5:SAVE.weapon==='blade'?1.6:1; } // 火箭筒0.5×攻速/砍刀更快
 function fire(){
   if(SAVE.weapon==='blade'){ fireBlade(); return; }
   const n=(SAVE.weapon==='gun')?(1+S.keys.multi):1;
@@ -464,11 +464,23 @@ function fireBlade(){ // 砍刀：近距离扇形挥砍，群伤1，攻速快
     const d=dist(e,S); if(d>R+e.r*0.5)continue;
     let df=Math.atan2(e.y-S.py,e.x-S.px)-a0;
     while(df>Math.PI)df-=2*Math.PI; while(df<-Math.PI)df+=2*Math.PI;
-    if(Math.abs(df)<=arc/2+ (e.r/Math.max(40,d)) ){ e.hp-=1; e.hitT=0.1; hitFx(e);
-      S.dnums.push({x:e.x+rand(-4,4),y:e.y-e.r-4,v:1,crit:false,life:0.7,vy:-40});
+    if(Math.abs(df)<=arc/2+ (e.r/Math.max(40,d)) ){ const bd=playerDmg(); // 砍刀伤害 1×
+      e.hp-=bd; e.hitT=0.1; hitFx(e);
+      S.dnums.push({x:e.x+rand(-4,4),y:e.y-e.r-4,v:Math.round(bd*10)/10,crit:false,life:0.7,vy:-40});
+      if(S.keys.shrap){ // 碎片溅射：向敌人身后(挥砍方向)125°扇形
+        for(const o of S.enemies){ if(o.dead||o===e)continue;
+          const dO=dist(o,e); if(dO>R)continue;
+          let dfa=Math.atan2(o.y-e.y,o.x-e.x)-a0;
+          while(dfa>Math.PI)dfa-=2*Math.PI; while(dfa<-Math.PI)dfa+=2*Math.PI;
+          if(Math.abs(dfa)<=125*Math.PI/360){ o.hp-=bd*0.8; o.hitT=0.1; hitFx(o);
+            S.dnums.push({x:o.x+rand(-4,4),y:o.y-o.r-4,v:Math.round(bd*0.8*10)/10,crit:false,life:0.7,vy:-40});
+            if(o.hp<=0) killEnemy(o); } } }
       if(e.hp<=0) killEnemy(e); hit=true; } }
-  if(hit){ AudioSys.sfx('hit'); S.shake=Math.max(S.shake||0,2); }
-  S.parts.push({slash:true,x:S.px,y:S.py,a:a0,r:R,arc,life:0.16,maxlife:0.16});
+  if(hit){ AudioSys.sfx('hit'); S.shake=Math.max(S.shake||0,2);
+    for(const e2 of S.enemies){ if(e2.hitT>=0.09&&dist(e2,S)<R+20&&!e2.dead){ // 命中火花
+      S.parts.push({ring:true,x:e2.x,y:e2.y,r:0,max:20,life:0.2,maxlife:0.2,color:'#ffe9b8'}); } } }
+  S.parts.push({slash:true,x:S.px,y:S.py,a:a0,r:R,arc,life:0.24,maxlife:0.24}); // 挥砍弧光（更亮更久）
+  S.parts.push({slash:true,x:S.px,y:S.py,a:a0,r:R*0.6,arc:arc*0.8,life:0.16,maxlife:0.16}); // 内层余辉
 }
 function launchVolley(m){
   const isR=SAVE.weapon==='rocket';
@@ -719,6 +731,7 @@ function update(dt){
           b._ex=true; const lvlR=b.rocket?(S.keys.rktr||0):(S.keys.blast||0);
           const br=b.rocket?40*(1+0.15*lvlR):30+12*lvlR, bd2=playerDmg()*(b.rocket?0.8:(0.5+0.25*lvlR));
           S.parts.push({ring:true,x:e.x,y:e.y,r:0,max:br,life:0.25,maxlife:0.25});
+          if(b.rocket&&S.keys.fire){ S.fires.push({x:e.x,y:e.y,r:br,life:2.4,tick:0}); } // 烈焰残留
           S.shake=Math.max(S.shake||0,4);
           for(const o of S.enemies){ if(o.dead||o===e)continue; if(dist(o,e)<br){ o.hp-=bd2; o.hitT=0.1; hitFx(o); if(o.hp<=0) killEnemy(o); } }
           b.dead=true;
@@ -865,7 +878,7 @@ function update(dt){
         let tgt=null,bd=280;
         for(const e of S.enemies){ const dd=dist(e,dfn); if(dd<bd){bd=dd;tgt=e;} }
         if(tgt){ dfn.ang=Math.atan2(tgt.y-dfn.y,tgt.x-dfn.x);
-          const tDmg=dfn.temp?1:(0.5*(1+0.5*S.keys.tdmg))*(SAVE.char==='engineer'?1.45:1); // 临时炮台固定伤害1；工程师布防炮台+45%
+          const tDmg=dfn.temp?playerDmg():(0.5*(1+0.5*S.keys.tdmg))*(SAVE.char==='engineer'?1.45:1); // 临时炮台伤害1×；工程师布防炮台+45%
           S.bullets.push({x:dfn.x,y:dfn.y,vx:Math.cos(dfn.ang)*420,vy:Math.sin(dfn.ang)*420,life:1.2,pierce:0,hitset:new Set(),dmg0:tDmg});
           dfn.cd=0.8/(1+0.2*S.keys.trate)/(dfn.temp?2:1)/((SAVE.char==='engineer'&&!dfn.temp)?1.3:1); }
       }
@@ -882,6 +895,14 @@ function update(dt){
     }
   }
   S.defs=S.defs.filter(d=>!(d.temp&&d.life<=0)); // 工程师临时炮台到期拆除
+  // 烈焰残留火圈
+  for(const f of S.fires){ f.life-=dt; f.tick-=dt;
+    if(f.tick<=0){ f.tick=0.4;
+      for(const e of S.enemies){ if(e.dead)continue;
+        if(dist(e,f)<f.r){ e.hp-=0.5*S.keys.fire; e.hitT=Math.max(e.hitT,0.05);
+          S.dnums.push({x:e.x+rand(-4,4),y:e.y-e.r-4,v:0.5*S.keys.fire,crit:false,life:0.6,vy:-30});
+          if(e.hp<=0) killEnemy(e); } } } }
+  S.fires=S.fires.filter(f=>f.life>0);
   // gems
   const mag=60*(1+0.4*S.keys.magnet);
   for(const g of S.gems){
@@ -909,7 +930,7 @@ function update(dt){
   }
   S.coins=S.coins.filter(c=>!c.dead);
 
-  for(const p of S.parts){ p.life-=dt; if(p.ring)p.r+=dt*p.max/p.maxlife; else{p.x+=p.vx*dt;p.y+=p.vy*dt;} }
+  for(const p of S.parts){ p.life-=dt; if(p.ring){p.r+=dt*p.max/p.maxlife;} else{ if(p.vx){p.x+=p.vx*dt; p.y+=p.vy*dt;} } } // 无速度的粒子(挥砍弧光)原地渐隐
   S.parts=S.parts.filter(p=>p.life>0);
   for(const t of S.texts)t.life-=dt;
   S.texts=S.texts.filter(t=>t.life>0);
@@ -965,15 +986,17 @@ function openAirshop(){
   if(cleared) S.parts.push({ring:true,x:S.px,y:S.py,r:0,max:160,life:0.4,maxlife:0.4});
   S.texts.push({txt:'🚁 空中商店抵达'+(cleared?'，清扫了 '+cleared+' 只怪物':''), life:1.5});
   ovT.textContent='🚁 空中商店';
-  ovX.innerHTML='金币：<b>'+SAVE.coins+'</b>（购买的道具立即布置在主角身边）';
+  ovX.innerHTML='金币：<b>'+(SAVE.coins+S.coinsRun)+'</b>（含本局拾取 '+S.coinsRun+'；购买的道具立即布置在主角身边）';
   ch.innerHTML='';
+  const total=()=>SAVE.coins+S.coinsRun; // 合并钱包：存款+本局拾取
+  const spend=(n)=>{ const fromRun=Math.min(S.coinsRun,n); S.coinsRun-=fromRun; SAVE.coins-=n-fromRun; persist(); };
   for(const it of DEF_ITEMS){
     const c=document.createElement('div'); c.className='card';
     c.innerHTML='<div class="ic">'+it.ic+'</div><div class="nm">'+it.nm+'</div><div class="ds">'+it.ds+'</div><div class="lv">💰 '+it.cost+' 购买</div>';
-    if(SAVE.coins<it.cost){ c.style.opacity=.5;
+    if(total()<it.cost){ c.style.opacity=.5;
       c.onclick=()=>{ ovT.textContent='⚠️ 金币不足（需要 '+it.cost+'）'; setTimeout(()=>{ovT.textContent='🚁 空中商店';},900); };
-    } else c.onclick=()=>{ if(SAVE.coins<it.cost)return;
-      SAVE.coins-=it.cost; persist();
+    } else c.onclick=()=>{ if(total()<it.cost)return;
+      spend(it.cost);
       const a2=rand(0,Math.PI*2);
       S.defs.push({id:it.id,x:Math.max(40,Math.min(WW-40,S.px+Math.cos(a2)*80)),y:Math.max(40,Math.min(WH-40,S.py+Math.sin(a2)*80)),cd:0,ang:0});
       openAirshop(); };
@@ -981,13 +1004,13 @@ function openAirshop(){
   }
   const b1=document.createElement('div'); b1.className='card';
   b1.innerHTML='<div class="ic">🔥</div><div class="nm">战斗狂热</div><div class="ds">本场伤害 +50%</div><div class="lv">💰 25 购买</div>';
-  if(SAVE.coins<25||S.runDmg>1) b1.style.opacity=.5;
-  b1.onclick=()=>{ if(SAVE.coins<25||S.runDmg>1)return; SAVE.coins-=25; persist(); S.runDmg=1.5; openAirshop(); };
+  if(total()<25||S.runDmg>1) b1.style.opacity=.5;
+  b1.onclick=()=>{ if(total()<25||S.runDmg>1)return; spend(25); S.runDmg=1.5; openAirshop(); };
   ch.appendChild(b1);
   const b2=document.createElement('div'); b2.className='card';
   b2.innerHTML='<div class="ic">💚</div><div class="nm">战地医疗</div><div class="ds">生命回满</div><div class="lv">💰 20 购买</div>';
-  if(SAVE.coins<20||S.hp>=S.maxhp) b2.style.opacity=.5;
-  b2.onclick=()=>{ if(SAVE.coins<20||S.hp>=S.maxhp)return; SAVE.coins-=20; persist(); S.hp=S.maxhp; openAirshop(); };
+  if(total()<20||S.hp>=S.maxhp) b2.style.opacity=.5;
+  b2.onclick=()=>{ if(total()<20||S.hp>=S.maxhp)return; spend(20); S.hp=S.maxhp; openAirshop(); };
   ch.appendChild(b2);
   // ---- 空中商店广告点：缺钱时看广告领急用金币 ----
   const b3=document.createElement('div'); b3.className='card';
@@ -1269,13 +1292,26 @@ function draw(){
     ctx.fillStyle='#fff'; ctx.fillRect(1,-1.5,4,3); }
     ctx.restore();
   }
+  // 烈焰残留火圈绘制
+  for(const f of S.fires){
+    const a2=Math.min(1,f.life/2.4);
+    const fl=1+Math.sin(f.life*22+f.x)*0.06; // 火焰闪烁
+    ctx.fillStyle='rgba(255,110,30,'+(0.16*a2).toFixed(2)+')';
+    ctx.beginPath(); ctx.arc(f.x,f.y,f.r*fl,0,7); ctx.fill();
+    ctx.strokeStyle='rgba(255,160,40,'+(0.55*a2).toFixed(2)+')'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(f.x,f.y,f.r*fl,0,7); ctx.stroke(); ctx.lineWidth=1;
+    for(let i=0;i<3;i++){ const fa=Math.random()*7, fr=Math.random()*f.r*0.5;
+      ctx.fillStyle='rgba(255,200,60,'+(0.4*a2*Math.random()).toFixed(2)+')';
+      ctx.fillRect(f.x+Math.cos(fa)*fr-1.5, f.y+Math.sin(fa)*fr-1.5, 3,3); }
+  }
   for(const p of S.parts){
-    if(p.slash){ const a2=Math.max(0,p.life/p.maxlife); // 砍刀挥砍弧光
-      ctx.strokeStyle='rgba(255,233,184,'+(a2*0.9).toFixed(2)+')'; ctx.lineWidth=10; ctx.lineCap='round';
+    if(p.slash){ const a2=Math.max(0,p.life/p.maxlife); // 砍刀挥砍弧光（发光双弧）
+      ctx.shadowColor='rgba(255,233,184,.8)'; ctx.shadowBlur=8;
+      ctx.strokeStyle='rgba(255,233,184,'+(a2*0.95).toFixed(2)+')'; ctx.lineWidth=12; ctx.lineCap='round';
       ctx.beginPath(); ctx.arc(p.x,p.y,p.r,p.a-p.arc/2,p.a+p.arc/2); ctx.stroke();
-      ctx.strokeStyle='rgba(255,255,255,'+(a2*0.6).toFixed(2)+')'; ctx.lineWidth=3;
+      ctx.strokeStyle='rgba(255,255,255,'+(a2*0.8).toFixed(2)+')'; ctx.lineWidth=4;
       ctx.beginPath(); ctx.arc(p.x,p.y,p.r*0.92,p.a-p.arc/2,p.a+p.arc/2); ctx.stroke();
-      ctx.lineWidth=1; ctx.lineCap='butt'; }
+      ctx.shadowBlur=0; ctx.lineWidth=1; ctx.lineCap='butt'; }
     else if(p.ring){ const c2=p.color||'#ffd76a', a2=Math.max(0,p.life/p.maxlife);
       ctx.strokeStyle='rgba('+parseInt(c2.slice(1,3),16)+','+parseInt(c2.slice(3,5),16)+','+parseInt(c2.slice(5,7),16)+','+a2+')';
       ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.stroke(); }
@@ -1350,8 +1386,23 @@ function drawHero(){
   ctx.fillRect(-3+ex,-10+ey,2,2); ctx.fillRect(1+ex,-10+ey,2,2);
   ctx.fillStyle='#d64545'; ctx.fillRect(-6,-15,12,4); ctx.fillRect(2,-13,7,2);
   ctx.save(); ctx.rotate(aim);
-  ctx.fillStyle='#454c5c'; ctx.fillRect(6,-2,12,4);
-  ctx.fillStyle='#2f3440'; ctx.fillRect(4,-3,5,6);
+  if(SAVE.weapon==='rocket'){ // 🚀 火箭筒建模
+    ctx.fillStyle='#5c6b52'; ctx.fillRect(3,-4.5,21,9);      // 筒身
+    ctx.fillStyle='#3e4a38'; ctx.fillRect(0,-6,5,12);        // 后座
+    ctx.fillStyle='#2f382b'; ctx.fillRect(22,-6,5,12);       // 炮口
+    ctx.fillStyle='#d05a3e'; ctx.fillRect(10,-5.5,6,3);      // 警示条
+    ctx.fillStyle='#6b4a2f'; ctx.fillRect(8,4,4,6);          // 握把
+  } else if(SAVE.weapon==='blade'){ // 🗡️ 砍刀建模
+    ctx.rotate(0.55);                                        // 抬臂持刀
+    ctx.fillStyle='#6b4a2f'; ctx.fillRect(6,-1.5,7,3);       // 刀柄
+    ctx.fillStyle='#dfe9f2'; ctx.beginPath();
+    ctx.moveTo(13,-2.5); ctx.lineTo(30,-2); ctx.lineTo(34,1.5); ctx.lineTo(13,2.5); ctx.closePath(); ctx.fill(); // 刀刃
+    ctx.fillStyle='#8fa0ad'; ctx.fillRect(13,-2.5,5,5);      // 刀背铆接
+    ctx.fillStyle='#aebccb'; ctx.fillRect(13,-1,17,1);       // 刀线
+  } else { // 🔫 手枪建模
+    ctx.fillStyle='#454c5c'; ctx.fillRect(6,-2,12,4);
+    ctx.fillStyle='#2f3440'; ctx.fillRect(4,-3,5,6);
+  }
   ctx.restore();
   ctx.restore();
   ctx.restore();
@@ -1450,23 +1501,41 @@ function showHomeLevels(){
   }
   ch.appendChild(list);
 }
-function pickRows(){ // 选关页顶部：角色 / 武器选择
+const CHAR_INFO={
+ warrior:{t:'⚔️ 勇士', d:'主动：冲刺（CD 5秒，冲刺中无敌0.32秒）<br>被动：无（各项均衡）'},
+ scholar:{t:'📖 学者', d:'主动：专注——6秒内所有攻击必定暴击（CD 15秒）<br>被动：经验获取 +30%；初始速度与攻击 -10%'},
+ merchant:{t:'💰 商人', d:'主动：召唤空中商店（CD 120秒）<br>被动：金币爆率 45%→65%；最大生命 -2'},
+ engineer:{t:'🔧 工程师', d:'主动：脚下临时炮台（伤害1×、攻速2倍、存在15秒，CD 45秒）<br>被动：布防炮台伤害+45%攻速+30%；机枪卡牌出现率翻倍；自身伤害 -15%'}
+};
+const WEAPON_INFO={
+ gun:{t:'🔫 手枪', d:'均衡：攻速1×、伤害1×、3发一排接力齐射<br>专属卡：🔱多重弹 🎯穿透 🧨爆破弹'},
+ rocket:{t:'🚀 火箭筒', d:'伤害2.2×、攻速0.5×，命中爆炸溅射（0.8×伤害）<br>专属卡：🚀爆炸范围(max5，+75%) 🔥烈焰残留(max5)'},
+ blade:{t:'🗡️ 砍刀', d:'攻速1.6×、伤害1×、90°扇形群伤（满级横扫覆盖75%圆）<br>专属卡：🗡️增加横扫(max5) 💠碎片溅射(max5，身后125°、0.8×)'}
+};
+function pickRows(){ // 选关页顶部：角色 / 武器选择（点一下看详情，再点同一下选择）
   const wrap=document.createElement('div'); wrap.id='pickrows';
+  let detail=document.createElement('p');
+  detail.style.cssText='margin:6px 0;font-size:12px;color:#ffd76a;text-align:center;min-height:1em;line-height:1.5;';
+  const showInfo=(key,id)=>{ const I=(key==='char'?CHAR_INFO:WEAPON_INFO)[id];
+    detail.innerHTML='<b style="font-size:14px">'+I.t+'</b><br>'+I.d; };
   const mk=(label,items,key)=>{
     const lab=document.createElement('p'); lab.innerHTML='<b style="color:#ffd76a">'+label+'</b>';
     lab.style.cssText='margin:6px 0 0;font-size:12px;text-align:center;'; wrap.appendChild(lab);
     const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;flex-wrap:wrap;justify-content:center;';
+    let preview=null;
     items.forEach(it=>{
       const b=document.createElement('button');
       b.textContent=it.ic+' '+it.nm+(SAVE[key]===it.id?' ✅':'');
       b.style.cssText='font-size:12px;padding:6px 10px;'+(SAVE[key]===it.id?'border:2px solid #ffd76a;background:#3a2f14;':'');
       if(SAVE.tut===2){ b.className='tutdim'; }
-      b.onclick=()=>{ SAVE[key]=it.id; persist(); showPage('select'); };
+      b.onclick=()=>{ if(preview===it.id && SAVE[key]!==it.id){ SAVE[key]=it.id; persist(); showPage('select'); } // 再点同一项=选择
+        else { preview=(SAVE[key]===it.id)?null:it.id; showInfo(key,it.id); } };
       row.appendChild(b); });
     wrap.appendChild(row);
   };
   mk('👤 角色',[{id:'warrior',nm:'勇士',ic:'⚔️'},{id:'scholar',nm:'学者',ic:'📖'},{id:'merchant',nm:'商人',ic:'💰'},{id:'engineer',nm:'工程师',ic:'🔧'}],'char');
   mk('🔫 武器',[{id:'gun',nm:'手枪',ic:'🔫'},{id:'rocket',nm:'火箭筒',ic:'🚀'},{id:'blade',nm:'砍刀',ic:'🗡️'}],'weapon');
+  wrap.appendChild(detail);
   ch.appendChild(wrap);
 }
 function renderLevelList(){
@@ -1551,7 +1620,7 @@ function buildDefend(){
         if(SAVE.tut===2&&it.id!=='turret'){ setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),1200); ovT.textContent='教程：先拖动机枪（炮塔）到地图上'; return; }
         SAVE.coins-=curCost(); arr.push({id:it.id,x:Math.round(x),y:Math.round(y)}); persist(); buildDefend();
         // ---- 教程：布防两个机枪后引导出战 ----
-        if(SAVE.tut===2&&arr.filter(d=>d.id==='turret').length>=2){ SAVE.tut=3; persist(); ovT.textContent='✅ 教程完成！点下方「出战第1关」开始战斗'; }
+        if(SAVE.tut===2&&arr.filter(d=>d.id==='turret').length>=2){ SAVE.tut=3; persist(); ovT.textContent='✅ 教程完成！点下方「出战第1关」开始战斗'; Spot.show([navPlay],'教程完成！点击出战第1关！'); }
       };
       document.addEventListener('mousemove',mv); document.addEventListener('mouseup',fin);
       document.addEventListener('touchmove',mv,{passive:false}); document.addEventListener('touchend',fin);
