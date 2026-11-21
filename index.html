@@ -15,7 +15,7 @@
   #ui{position:absolute; top:10px; left:10px; right:10px; padding:0; pointer-events:none; display:flex; justify-content:space-between; align-items:flex-start; gap:8px; font-size:clamp(10px,2.6vw,13px); flex-wrap:wrap;}
   #uiright{display:flex; flex-direction:column; gap:5px; align-items:flex-end;}
   .tutdim{opacity:.35!important; filter:grayscale(.85); pointer-events:none;}
-  #ui span{background:linear-gradient(180deg,rgba(16,28,55,.92),rgba(10,18,38,.92)); border:1px solid rgba(255,255,255,.14); border-radius:999px; padding:5px 12px; box-shadow:0 3px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08); text-shadow:0 1px 2px #000; white-space:nowrap;}
+  #ui span{background:linear-gradient(180deg,rgba(34,28,68,.94),rgba(20,16,48,.94)); border:1px solid rgba(255,255,255,.14); border-radius:999px; padding:5px 12px; box-shadow:0 3px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08); text-shadow:0 1px 2px #000; white-space:nowrap;}
   .stat{font-weight:bold; color:#ffd76a;}
   #xpslot{position:absolute; left:0; top:18%; height:64%; width:13px; background:rgba(8,16,34,.78); border:1.5px solid rgba(255,255,255,.22); border-radius:0 8px 8px 0; box-shadow:0 2px 8px rgba(0,0,0,.4); overflow:hidden;}
   #xpbar{position:absolute; bottom:0; left:0; right:0; height:0%; transition:height .15s; background:linear-gradient(0deg,#2fce5e,#7dff9e); box-shadow:0 0 10px rgba(76,224,122,.8);}
@@ -23,7 +23,7 @@
   /* ---- 覆盖层：手游主界面 ---- */
   #overlay{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(8,14,28,.9); border-radius:14px; text-align:center; padding:18px; z-index:5; overflow-y:auto;}
   #overlay.hidden{display:none;}
-  #overlay.menu{background:radial-gradient(120% 90% at 50% 0%, #2a4d9e 0%, #16336f 45%, #0a1c44 100%); overflow-y:auto;}
+  #overlay.menu{background:radial-gradient(120% 90% at 50% 0%, #4a3a9e 0%, #2a1f6f 45%, #0e0a3a 100%); overflow-y:auto; justify-content:flex-start; padding-top:26px; -webkit-overflow-scrolling:touch; touch-action:pan-y;}
   #overlay.menu::before{content:''; position:absolute; inset:0; background:radial-gradient(60% 40% at 50% 108%, rgba(255,180,40,.18), transparent 70%); pointer-events:none;}
   #overlay h2{margin:0; font-size:clamp(22px,7vw,32px); font-weight:900; letter-spacing:3px;
     background:linear-gradient(180deg,#fff6cf 20%,#ffd76a 55%,#f7a916 90%);
@@ -31,7 +31,7 @@
     filter:drop-shadow(0 2px 0 rgba(120,60,0,.65)) drop-shadow(0 4px 10px rgba(0,0,0,.5));}
   #overlay p{margin:0; color:var(--muted); font-size:13px; max-width:520px; line-height:1.7;}
   #overlay p b{color:#ffd76a;}
-  #choices{display:flex; gap:12px; flex-wrap:wrap; justify-content:center; position:relative;}
+  #choices{display:flex; gap:12px; flex-wrap:wrap; justify-content:center; position:relative; width:100%; max-width:560px; margin:0 auto;}
   /* ---- 卡片 ---- */
   .card{width:168px; background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1.5px solid rgba(255,255,255,.14); border-radius:14px; padding:12px 10px; cursor:pointer; transition:transform .12s, border-color .12s, box-shadow .12s; pointer-events:auto; box-shadow:0 6px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.07);}
   .card:hover{transform:translateY(-4px); border-color:var(--accent); box-shadow:0 10px 22px rgba(0,0,0,.5), 0 0 0 1px rgba(255,180,40,.4);}
@@ -92,6 +92,7 @@
   <button id="dashBtn" class="hidden" style="position:absolute; bottom:14px; right:8px; z-index:4; padding:8px 14px; font-size:16px;">⚡</button>
   <div id="nav" class="hidden">
     <button id="navShop">🛒 商店</button>
+    <button id="navReward">🎁 奖励</button>
     <button id="navPlay">▶ 开始战斗</button>
   </div>
   <div class="hint">怪物会越刷越多越来越快 · 活下去！</div>
@@ -114,7 +115,7 @@ let DPR=1;
 })();
 const W=cv._lw, H=cv._lh;
 const WW=W*2, WH=H*2; // 世界是屏幕的2倍
-const ov=document.getElementById('overlay'), ovT=document.getElementById('ovTitle'), ovX=document.getElementById('ovText'), ch=document.getElementById('choices'), btn=document.getElementById('btn'), pauseBtn=document.getElementById('pauseBtn'), nav=document.getElementById('nav'), navShop=document.getElementById('navShop'), navPlay=document.getElementById('navPlay'), dashBtn=document.getElementById('dashBtn');
+const ov=document.getElementById('overlay'), ovT=document.getElementById('ovTitle'), ovX=document.getElementById('ovText'), ch=document.getElementById('choices'), btn=document.getElementById('btn'), pauseBtn=document.getElementById('pauseBtn'), nav=document.getElementById('nav'), navShop=document.getElementById('navShop'), navReward=document.getElementById('navReward'), navPlay=document.getElementById('navPlay'), dashBtn=document.getElementById('dashBtn');
 const hpEl=document.getElementById('hp'), tEl=document.getElementById('time'), xpEl=document.getElementById('xpbar'), xpNextEl=document.getElementById('xptext'), coinEl=document.getElementById('coin');
 const rand=(a,b)=>a+Math.random()*(b-a);
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -154,8 +155,8 @@ function achStats(){ return {kills:SAVE.stats&&SAVE.stats.kills||0, best:SAVE.st
 let OFFLINE_GIFT=0;
 try{
   const last=(JSON.parse(localStorage.getItem('sv_save')||'{}').lastSeen)||0; // 先读盘, 防止 ensureDaily 的 persist 覆盖
-  const mins=Math.min(480, Math.floor((Date.now()-last)/60000)); // 上限8小时
-  if(mins>=1) OFFLINE_GIFT=mins*2;
+  const mins=Math.floor((Date.now()-last)/60000);
+  if(mins>=1) OFFLINE_GIFT=Math.min(500, mins*2); // 离线收益上限500
   ensureDaily();
 }catch(e){}
 if(SAVE.sound===undefined) SAVE.sound=true;
@@ -355,10 +356,10 @@ const AudioSys={
   stopMusic(){ if(this.musicTimer){ clearInterval(this.musicTimer); this.musicTimer=null; } }
 };
 const SHOP_ITEMS=[
- {id:'dmg', ic:'⚔️', nm:'火力强化', ds:'基础伤害 +1%/级（满级 +200%）', max:200, cost:l=>Math.ceil(5*Math.pow(1.12,l))},
- {id:'hp', ic:'❤️', nm:'装甲强化', ds:'初始生命 +1/级（上限 20）', max:20, cost:l=>Math.ceil(25*Math.pow(1.15,l))},
- {id:'spd', ic:'👟', nm:'引擎强化', ds:'基础移速 +1%/级（满级 +200%）', max:200, cost:l=>Math.ceil(5*Math.pow(1.12,l))},
- {id:'rate', ic:'⚡', nm:'供弹强化', ds:'基础攻速 +1%/级（满级 +200%）', max:200, cost:l=>Math.ceil(5*Math.pow(1.14,l))},
+ {id:'dmg', ic:'⚔️', nm:'火力强化', ds:'基础伤害 +1%/级（满级 +200%）', max:200, cost:l=>8+l*7},
+ {id:'hp', ic:'❤️', nm:'装甲强化', ds:'初始生命 +1/级（上限 20）', max:20, cost:l=>40+l*20},
+ {id:'spd', ic:'👟', nm:'引擎强化', ds:'基础移速 +1%/级（满级 +200%）', max:200, cost:l=>8+l*7},
+ {id:'rate', ic:'⚡', nm:'供弹强化', ds:'基础攻速 +1%/级（满级 +200%）', max:200, cost:l=>10+l*8},
 ];
 
 const DEF_ITEMS=[
@@ -490,19 +491,20 @@ function playerDmg(){ return (1+0.01*SAVE.up.dmg)*(1+0.25*S.keys.dmg)*(S.runDmg|
 function fireRate(){ return 1.4*(1+0.01*SAVE.up.rate)*(1+0.25*S.keys.rate); }
 function weaponFireMul(){ return SAVE.weapon==='rocket'?0.5:SAVE.weapon==='blade'?1.6:1; } // 火箭筒0.5×攻速/砍刀更快
 function fire(){
-  S.muzzle=0.08; // 枪口火光
   if(SAVE.weapon==='blade'){ fireBlade(); return; }
   const n=(SAVE.weapon==='gun')?(1+S.keys.multi):1;
   const k1=Math.min(3,n);
   launchVolley(k1); // 第一排：一次最多3发扇形
   if(n>k1){ S.volleyPending=n-k1; S.volleyT=0.28; } // 第二排接力：等第一排出手后再射
 }
-function fireBlade(){ // 砍刀：近距离扇形挥砍，群伤1，攻速快
+function fireBlade(){ // 砍刀：敌人进入攻击范围才挥刀，扇形群伤，可暴击
+  const lvl0=S.keys.blr||0;
+  const RMAX=70*(1+0.05*lvl0)*1.3; // 最大索敌范围（含挥刀弧半径余量）
   let tgt=null,best=1e9;
   for(const e of S.enemies){ if(e.dead)continue;
     if(e.x<S.camx-40||e.x>S.camx+W+40||e.y<S.camy-40||e.y>S.camy+H+40) continue;
-    const d=dist(e,S); if(d<best){best=d;tgt=e;} }
-  if(!tgt) return;
+    const d=dist(e,S); if(d<RMAX+e.r*0.5&&d<best){best=d;tgt=e;} }
+  if(!tgt) return; // 没进范围就站着不动（不挥刀）
   const lvl=S.keys.blr||0;
   const R=70*(1+0.05*lvl), arc=Math.PI/2+Math.PI*0.2*lvl; // 90°起，每级+36°，5级=270°(75%圆)
   const a0=Math.atan2(tgt.y-S.py,tgt.x-S.px);
@@ -512,9 +514,12 @@ function fireBlade(){ // 砍刀：近距离扇形挥砍，群伤1，攻速快
     const d=dist(e,S); if(d>R+e.r*0.5)continue;
     let df=Math.atan2(e.y-S.py,e.x-S.px)-a0;
     while(df>Math.PI)df-=2*Math.PI; while(df<-Math.PI)df+=2*Math.PI;
-    if(Math.abs(df)<=arc/2+ (e.r/Math.max(40,d)) ){ const bd=playerDmg(); // 砍刀伤害 1×
+    if(Math.abs(df)<=arc/2+ (e.r/Math.max(40,d)) ){
+      const crit=Math.random()<0.13*S.keys.crit || S.uberT>0;
+      const bd=playerDmg()*(crit?2:1); // 砍刀伤害 1×，可暴击2×
       e.hp-=bd; e.hitT=0.1; hitFx(e);
-      S.dnums.push({x:e.x+rand(-4,4),y:e.y-e.r-4,v:Math.round(bd*10)/10,crit:false,life:0.7,vy:-40});
+      if(crit){ S.shake=Math.max(S.shake||0,3); }
+      S.dnums.push({x:e.x+rand(-4,4),y:e.y-e.r-4,v:Math.round(bd*10)/10,crit,life:0.7,vy:-40});
       if(S.keys.shrap){ // 碎片溅射：向敌人身后(挥砍方向)125°扇形
         for(const o of S.enemies){ if(o.dead||o===e)continue;
           const dO=dist(o,e); if(dO>R)continue;
@@ -539,6 +544,7 @@ function launchVolley(m){
     const d=dist(e,S); if(d<best){best=d;tgt=e;}
   }
   if(!tgt)return; // 视野内没怪就不开枪
+  S.muzzle=0.08; // 枪口火光（确认有目标才亮）
   AudioSys.sfx('shoot');
   const base=Math.atan2(tgt.y-S.py, tgt.x-S.px);
   S.aimA=base;
@@ -620,7 +626,7 @@ function hitFx(e){ for(let i=0;i<3;i++) S.parts.push({x:e.x,y:e.y,vx:rand(-60,60
 // ---------- leveling ----------
 function gainXP(v){
   S.xp+=v*(1+0.25*S.keys.xp)*(SAVE.char==='scholar'?1.3:1);
-  while(S.xp>=S.xpNext){ S.xp-=S.xpNext; S.lvl++; S.xpNext=Math.floor(6*Math.pow(1.35,S.lvl-1)); levelUp(); }
+  while(S.xp>=S.xpNext){ S.xp-=S.xpNext; S.lvl++; S.xpNext=Math.floor(4+S.lvl*3+S.lvl*S.lvl*0.5); levelUp(); } // 平缓曲线: 1级7/10级84/20级204/30级394
 }
 function levelUp(){
   AudioSys.sfx('lvl');
@@ -691,16 +697,35 @@ addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 let touch=null;
 // ---- 摇杆式移动：手指第一次按下处为基点，拖动=方向，抬起重置 ----
 let joy=null;
-cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(); const s=W/r.width;
-  joy={bx:(e.clientX-r.left)*s, by:(e.clientY-r.top)*s, dx:0, dy:0}; });
-cv.addEventListener('pointermove',e=>{ if(!joy) return; const r=cv.getBoundingClientRect(); const s=W/r.width;
+// 鼠标（桌面调试）：仅mouse指针
+cv.addEventListener('pointerdown',e=>{ if(e.pointerType!=='mouse') return;
+  const r=cv.getBoundingClientRect(); const s=W/r.width;
+  joy={id:'mouse', bx:(e.clientX-r.left)*s, by:(e.clientY-r.top)*s, dx:0, dy:0}; });
+cv.addEventListener('pointermove',e=>{ if(!joy||joy.id!=='mouse') return; const r=cv.getBoundingClientRect(); const s=W/r.width;
   const RMAX=55; let dx=(e.clientX-r.left)*s-joy.bx, dy=(e.clientY-r.top)*s-joy.by;
   const d=Math.hypot(dx,dy); if(d>RMAX){ dx=dx/d*RMAX; dy=dy/d*RMAX; }
   joy.dx=dx; joy.dy=dy; });
-const joyEnd=()=>{ joy=null; };
-cv.addEventListener('pointerup',joyEnd); cv.addEventListener('pointercancel',joyEnd);
-addEventListener('pointerup',()=>touch=null);
-addEventListener('pointercancel',()=>touch=null);
+cv.addEventListener('pointerup',e=>{ if(joy&&joy.id==='mouse') joy=null; });
+// 手机：按 touch identifier 追踪，第二根手指不影响摇杆
+cv.addEventListener('touchstart',e=>{
+  for(const t of e.changedTouches){ if(!joy){
+    const r=cv.getBoundingClientRect(); const s=W/r.width;
+    joy={id:t.identifier, bx:(t.clientX-r.left)*s, by:(t.clientY-r.top)*s, dx:0, dy:0}; } }
+  if(e.cancelable) e.preventDefault();
+},{passive:false});
+cv.addEventListener('touchmove',e=>{
+  if(!joy) return;
+  for(const t of e.changedTouches){ if(t.identifier===joy.id){
+    const r=cv.getBoundingClientRect(); const s=W/r.width;
+    const RMAX=55; let dx=(t.clientX-r.left)*s-joy.bx, dy=(t.clientY-r.top)*s-joy.by;
+    const dd2=Math.hypot(dx,dy); if(dd2>RMAX){ dx=dx/dd2*RMAX; dy=dy/dd2*RMAX; }
+    joy.dx=dx; joy.dy=dy; } }
+  if(e.cancelable) e.preventDefault();
+},{passive:false});
+const joyEnd=e=>{ if(!joy) return; for(const t of e.changedTouches){ if(t.identifier===joy.id) joy=null; } };
+cv.addEventListener('touchend',joyEnd); cv.addEventListener('touchcancel',joyEnd);
+// 多指时按钮 touch 直通：移动中点暂停/技能立即生效
+const touchBtn=(el,fn)=>{ if(!el) return; el.addEventListener('touchstart',e=>{ e.preventDefault(); e.stopPropagation(); fn(); },{passive:false}); };
 
 // ---------- loop ----------
 let raf=null, lastT=0;
@@ -1139,9 +1164,14 @@ function draw(){
   if(!S){ ctx.font='bold 11px monospace'; ctx.textAlign='left'; ctx.fillStyle='rgba(255,255,255,.25)'; ctx.fillText('V24', 8, H-8); if(S&&S.shake>0)ctx.restore(); return; }
   ctx.save(); ctx.translate(-S.camx,-S.camy);
   const bg=ctx.createRadialGradient(WW/2,WH/2,WH*0.3,WW/2,WH/2,WW*0.75);
-  bg.addColorStop(0,'#1d2740'); bg.addColorStop(1,'#10151f');
+  bg.addColorStop(0,'#221c3f'); bg.addColorStop(0.6,'#171433'); bg.addColorStop(1,'#0c0a20');
   ctx.fillStyle=bg; ctx.fillRect(0,0,WW,WH);
-  ctx.strokeStyle='rgba(255,255,255,.05)'; ctx.lineWidth=1;
+  if(!S.stars) S.stars=[...Array(90)].map(()=>({x:rand(0,WW),y:rand(0,WH),r:rand(0.7,1.8),ph:rand(0,6)}));
+  for(const st of S.stars){ const sa=0.18+0.16*Math.sin(S.t*2+st.ph);
+    ctx.fillStyle='rgba(205,220,255,'+sa.toFixed(2)+')'; ctx.fillRect(st.x,st.y,st.r,st.r); }
+  ctx.fillStyle='rgba(120,80,200,.06)'; // 远山剪影层次
+  ctx.fillRect(0,0,WW,WH*0.18);
+  ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.lineWidth=1;
   for(let x=Math.floor(S.camx/40)*40; x<S.camx+W+40; x+=40){ctx.beginPath();ctx.moveTo(x,S.camy);ctx.lineTo(x,S.camy+H);ctx.stroke();}
   for(let y=Math.floor(S.camy/40)*40; y<S.camy+H+40; y+=40){ctx.beginPath();ctx.moveTo(S.camx,y);ctx.lineTo(S.camx+W,y);ctx.stroke();}
   if(S.decor) for(const d2 of S.decor){ // 地面装饰：草丛/石块/裂纹/小花
@@ -1425,13 +1455,23 @@ function draw(){
       ctx.shadowBlur=0; ctx.lineWidth=1; ctx.lineCap='butt'; }
     else if(p.flash){ const a2=Math.max(0,p.life/p.maxlife);
       ctx.fillStyle='rgba(255,255,240,'+(a2*0.85).toFixed(2)+')'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*(1.2-a2*0.4),0,7); ctx.fill(); }
-    else if(p.slash&&p.sweep){ const prog=1-Math.max(0,p.life/p.maxlife); // 扫过式挥砍：从一侧扫到另一侧
-      const a1=p.a-p.arc/2, cur=a1+p.arc*prog, span=Math.min(p.arc,p.arc*Math.max(0.12,prog*1.15));
-      ctx.strokeStyle='rgba(255,233,184,'+(0.9*Math.max(0.15,1-prog*0.7)).toFixed(2)+')'; ctx.lineWidth=14; ctx.lineCap='round';
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,cur-span,cur); ctx.stroke();
-      ctx.strokeStyle='rgba(255,255,255,'+(0.85*Math.max(0.1,1-prog*0.75)).toFixed(2)+')'; ctx.lineWidth=5;
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,cur-span,cur); ctx.stroke();
-      ctx.lineWidth=1; ctx.lineCap='butt'; }
+    else if(p.slash&&p.sweep){ const prog=1-Math.max(0,p.life/p.maxlife); // 新月形刀光：外弧+内弧闭合填充, 冷白蓝配色
+      const a1=p.a-p.arc/2, cur=a1+p.arc*prog, span=Math.min(p.arc,p.arc*Math.max(0.15,prog*1.12));
+      const fade=Math.max(0,1-prog*0.75);
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,cur-span,cur); ctx.arc(p.x,p.y,p.r*0.58,cur,cur-span,true); ctx.closePath();
+      ctx.fillStyle='rgba(200,228,255,'+(0.5*fade).toFixed(2)+')'; ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,'+(0.9*fade).toFixed(2)+')'; ctx.lineWidth=2.5; ctx.stroke();
+      ctx.strokeStyle='rgba(160,200,255,'+(0.5*fade).toFixed(2)+')'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r*0.79,cur-span+0.1,cur-0.05); ctx.stroke();
+      const tipA=cur; // 刀尖锐光
+      ctx.strokeStyle='rgba(255,255,255,'+(0.95*fade).toFixed(2)+')'; ctx.lineWidth=3; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(p.x+Math.cos(tipA)*p.r*0.62, p.y+Math.sin(tipA)*p.r*0.62);
+      ctx.lineTo(p.x+Math.cos(tipA)*p.r*1.04, p.y+Math.sin(tipA)*p.r*1.04); ctx.stroke();
+      ctx.lineWidth=1; ctx.lineCap='butt';
+      for(let k=0;k<3;k++){ const ta=cur-span*Math.random(); // 拖尾碎光
+        ctx.fillStyle='rgba(220,238,255,'+(0.5*fade*Math.random()).toFixed(2)+')';
+        const tr=p.r*(0.65+Math.random()*0.35);
+        ctx.fillRect(p.x+Math.cos(ta)*tr-1.5, p.y+Math.sin(ta)*tr-1.5, 3,3); } }
     else if(p.ring){ const c2=p.color||'#ffd76a', a2=Math.max(0,p.life/p.maxlife);
       ctx.strokeStyle='rgba('+parseInt(c2.slice(1,3),16)+','+parseInt(c2.slice(3,5),16)+','+parseInt(c2.slice(5,7),16)+','+a2+')';
       ctx.lineWidth=3; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.stroke(); }
@@ -1475,7 +1515,7 @@ function draw(){
     }
   }
   ctx.font='bold 11px monospace'; ctx.textAlign='left';
-  if(S.dbg){ ctx.fillStyle='#7fff9f'; const d=S.dbg; ctx.fillText('V39 \u00b7 FPS '+d.fps+' \u602a'+d.n+' \u5f39'+d.b+' \u654c\u5f39'+d.eb+' \u5f39\u8ba1'+d.bt, 8, H-8); }
+  if(S.dbg){ ctx.fillStyle='#7fff9f'; const d=S.dbg; ctx.fillText('V42 \u00b7 FPS '+d.fps+' \u602a'+d.n+' \u5f39'+d.b+' \u654c\u5f39'+d.eb+' \u5f39\u8ba1'+d.bt, 8, H-8); }
   if(S.redT>0){
     const a2=S.redT/0.2*0.45;
     const g2=ctx.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*0.75);
@@ -1554,7 +1594,7 @@ const PAGES={
     title:'像素幸存者',
     text:()=>'<b>💰 '+SAVE.coins+'</b> 金币　·　已解锁第 '+SAVE.unlocked+' 关<br><br>怪物从暗处围来，小人自动开枪。杀怪掉经验升级、25% 概率爆金币。<br>击败 Boss 全家通关！WASD/拖动移动 · Esc 暂停',
     nav:{shop:'🛒 商店', play:'▶ 开始战斗', playGo:'select'},
-    render(){ showHomeLevels(); buildDaily(); }
+    render(){ showHomeLevels(); }
   },
   select:{
     title:'选择关卡',
@@ -1573,6 +1613,12 @@ const PAGES={
     text:()=>'金币：<b>'+SAVE.coins+'</b>（属性永久生效）',
     nav:{shop:'🏠 主页', play:'▶ 选择关卡', playGo:'select'},
     render(){ renderShop(); }
+  },
+  reward:{
+    title:'🎁 奖励中心',
+    text:()=>'金币：<b>'+SAVE.coins+'</b> · 离线收益 / 每日任务 / 成就都在这里',
+    nav:{shop:'🛒 商店', play:'🏠 主页', playGo:'home'},
+    render(){ buildDaily(); }
   }
 };
 function showPage(name){
@@ -1590,9 +1636,11 @@ function showPage(name){
   ov.classList.add('menu'); ov.classList.remove('hidden');
   nav.classList.remove('hidden');
   navShop.textContent=P.nav.shop;
+  navReward.textContent=(page==='reward')?'🏠 主页':'🎁 奖励';
   navPlay.textContent=typeof P.nav.play==='function'?P.nav.play():P.nav.play;
   navPlay.disabled=false;
   navShop.onclick=()=>showPage(name==='shop'?'home':'shop');
+  navReward.onclick=()=>showPage(page==='reward'?'home':'reward');
   navPlay.onclick=()=>{
     if(P.nav.playGo==='start'){
       if(!pickMade && page==='select'){ // 未选关，不允许直接开战
@@ -1615,8 +1663,8 @@ function buildDaily(){
     const [bn,ba]=c.querySelectorAll('button');
     bn.style.cssText='font-size:12px; padding:6px 10px; letter-spacing:0;';
     ba.style.cssText=bn.style.cssText+'; background:linear-gradient(180deg,#7fe0ff,#3a9fe0);';
-    bn.onclick=()=>{ SAVE.coins+=OFFLINE_GIFT; persist(); coinEl.textContent=SAVE.coins; c.remove(); };
-    ba.onclick=()=>AdKit.showRewarded(()=>{ SAVE.coins+=OFFLINE_GIFT*2; persist(); coinEl.textContent=SAVE.coins; c.remove(); });
+    bn.onclick=()=>{ SAVE.coins+=OFFLINE_GIFT; persist(); coinEl.textContent=SAVE.coins; OFFLINE_GIFT=0; c.remove(); }; // 领取后重置, 防止反复领取
+    ba.onclick=()=>AdKit.showRewarded(()=>{ SAVE.coins+=OFFLINE_GIFT*2; persist(); coinEl.textContent=SAVE.coins; OFFLINE_GIFT=0; c.remove(); });
     ch.appendChild(c);
   }
   ensureDaily();
@@ -1668,6 +1716,9 @@ function buildDaily(){
     aw.appendChild(row);
   });
   ch.appendChild(aw);
+  showHomeExtras();
+}
+function showHomeExtras(){ // Boss Rush + 战绩（主页专属）
   // Boss Rush 入口
   if(!SAVE.rush||SAVE.rush.date!==todayStr()) SAVE.rush={date:todayStr(),used:0};
   const used=SAVE.rush.used||0, adLeft=Math.max(0,3-used);
@@ -1694,6 +1745,7 @@ function buildDaily(){
   ch.appendChild(sb);
 }
 function showHomeLevels(){
+  showHomeExtras(); // Rush入口与战绩面板保留在主页
   const list=document.createElement('div'); list.id='lvlist';
   if(SAVE.tut>=1&&SAVE.tut<=3){ const sk=document.createElement('button'); // 教程可跳过, 防死锁
     sk.textContent='⏭ 跳过教程（老玩家直接开玩）';
@@ -1808,6 +1860,7 @@ function showDefDetail(it){
 }
 function buildDefend(){
   ch.innerHTML='';
+  ovX.innerHTML=PAGES.defend.text(); coinEl.textContent=SAVE.coins; // 购买后刷新金币显示
   const arr=SAVE.defense[selLevel]||[];
   SAVE.defense[selLevel]=arr;
   const bar=document.createElement('div'); bar.style.cssText='display:flex; gap:8px; flex-wrap:wrap; justify-content:center; position:relative;';
@@ -1931,6 +1984,7 @@ showPage('home');
 // ---- 声音开关按钮（右上角） ----
 const sndBtn=document.createElement('button');
 dashBtn.onclick=charSkill; // 角色主动技能（手机按钮/空格）
+touchBtn(dashBtn,charSkill); touchBtn(pauseBtn,()=>{ if(S&&!S.over&&!S.choosing&&!S.paused) togglePause(); }); // 双指游戏时按钮直通
 sndBtn.style.cssText='position:absolute; top:26px; right:8px; z-index:4; padding:5px 12px; font-size:13px; letter-spacing:0; background:linear-gradient(180deg,#3a5a9e,#27406e); color:#cfe0ff; box-shadow:0 3px 0 #16244a;';
 sndBtn.textContent=SAVE.sound===false?'🔇':'🔊';
 sndBtn.onclick=()=>{ SAVE.sound=(SAVE.sound===false); persist(); sndBtn.textContent=SAVE.sound?'🔊':'🔇';
