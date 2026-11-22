@@ -24,7 +24,7 @@
   #overlay{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(8,14,28,.9); border-radius:14px; text-align:center; padding:18px; z-index:5; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y;}
   #overlay, #overlay *{touch-action:pan-y;} /* 全浮层允许纵向滚动，任何子元素不得再禁用 */
   #overlay.hidden{display:none;}
-  #overlay.menu{background:radial-gradient(120% 90% at 50% 0%, #4a3a9e 0%, #2a1f6f 45%, #0e0a3a 100%); overflow-y:auto; justify-content:flex-start; padding-top:26px; -webkit-overflow-scrolling:touch; touch-action:pan-y;}
+  #overlay.menu{background:radial-gradient(120% 90% at 50% 0%, #4a3a9e 0%, #2a1f6f 45%, #0e0a3a 100%); overflow-y:auto; justify-content:flex-start; padding-top:26px; padding-bottom:110px; -webkit-overflow-scrolling:touch; touch-action:pan-y;}
   #overlay.menu::before{content:''; position:absolute; inset:0; background:radial-gradient(60% 40% at 50% 108%, rgba(255,180,40,.18), transparent 70%); pointer-events:none;}
   @keyframes ovPop{0%{transform:scale(.5);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
   @keyframes ovRise{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -369,6 +369,10 @@ const UPGRADES=[
  {id:'theal', ic:'💚', nm:'治疗加速', ds:'治疗图腾专属：治疗冷却减少2秒（需在场）', max:1, def:'totem'},
  {id:'tslow', ic:'🧊', nm:'极寒之力', ds:'寒冰力场专属：减速效果增加25%（需在场）', max:1, def:'slow'},
  {id:'tspike', ic:'🔺', nm:'尖刺扩容', ds:'尖刺陷阱专属：伤害范围增加40%（需在场）', max:2, def:'spike'},
+ {id:'warr', ic:'🌪️', nm:'斗士', ds:'勇士专属：冲刺更快且全程无敌，但冷却+3秒', max:1, ch:'warrior'},
+ {id:'sch2', ic:'📚', nm:'博闻', ds:'学者专属：每次升级随机直接获得2张卡牌（不再三选一）', max:1, ch:'scholar'},
+ {id:'mer2', ic:'✈️', nm:'多次空运', ds:'商人专属：本局可多召唤1次空中商店', max:1, ch:'merchant'},
+ {id:'eng2', ic:'🔩', nm:'双子炮台', ds:'工程师专属：每次召唤2个临时炮台', max:1, ch:'engineer'},
  {id:'shield', ic:'🔵', nm:'能量护盾', ds:'周期性自动抵挡一次伤害（冷却20s−3s/级）', max:3},
  {id:'spd', ic:'👟', nm:'疾风步', ds:'移速 +20%（满级 100%）', max:5},
  {id:'hp', ic:'❤️', nm:'坚韧', ds:'最大生命 +2，并回满', max:6},
@@ -387,10 +391,10 @@ function startGame(){
   if(SAVE.tut===3){ SAVE.tut=4; persist(); } // 开战后教程彻底结束：布防页不再重弹出战指引
   S={t:0, test:!!testBoss||rushOn, rushMode:rushOn, rushN:0, kills:0, level:selLevel, mul:mul, coinsRun:0, coins:[], ebullets:[], spawnTimer:1,
      px:W/2, py:H/2, x:W/2, y:H/2, camx:0, camy:0, moving:0, hp:10+SAVE.up.hp-(SAVE.char==='merchant'?2:0), maxhp:10+SAVE.up.hp-(SAVE.char==='merchant'?2:0), lvl:1, xp:0, xpNext:6,
-     keys:{dmg:0,rate:0,multi:0,pierce:0,spd:0,hp:0,magnet:0,orbit:0,nova:0,regen:0,crit:0,xp:0,tdmg:0,trate:0,homing:0,blast:0,shield:0,thorn:0,wind:0,rktr:0,fire:0,blr:0,shrap:0,theal:0,tslow:0,tspike:0},
+     keys:{dmg:0,rate:0,multi:0,pierce:0,spd:0,hp:0,magnet:0,orbit:0,nova:0,regen:0,crit:0,xp:0,tdmg:0,trate:0,homing:0,blast:0,shield:0,thorn:0,wind:0,rktr:0,fire:0,blr:0,shrap:0,theal:0,tslow:0,tspike:0,warr:0,sch2:0,mer2:0,eng2:0},
      dashCd:0, dashing:0, dashInv:0, dashA:0, shieldT:0, thornT:0, volleyPending:0, volleyT:0, skillCd:0, uberT:0,
      bullets:[], enemies:[], gems:[], parts:[], novaT:0, orbitA:0, fireT:0.6, hurtT:0, fires:[],
-     bossCount:0, bossSpawnAt:0, paused:false, dnums:[], nextBossAt:120, over:false, choosing:false, revived:false, texts:[], aimA:0, walkT:0, defs:(SAVE.defense[selLevel]||[]).map(d=>({id:d.id,x:d.x,y:d.y,cd:0,ang:0})), runDmg:1, airDone:rushOn, refreshed:false};
+     bossCount:0, bossSpawnAt:0, paused:false, dnums:[], nextBossAt:150, over:false, choosing:false, revived:false, texts:[], aimA:0, walkT:0, defs:(SAVE.defense[selLevel]||[]).map(d=>({id:d.id,x:d.x,y:d.y,cd:0,ang:0})), runDmg:1, airDone:rushOn, refreshed:false, refreshN:0, airUsed:0};
   S.decor=(()=>{ const a=[]; for(let i=0;i<64;i++){ const k=Math.random();
     a.push({t:k<0.5?'grass':k<0.75?'stone':k<0.9?'crack':'flower', x:rand(20,WW-20), y:rand(20,WH-20), s:rand(0.7,1.3), rot:rand(0,6.28), ph:rand(0,6)}); } return a; })();
      ov.classList.add('hidden'); ov.classList.remove('menu'); ch.innerHTML=''; pauseBtn.classList.remove('hidden'); dashBtn.classList.remove('hidden');
@@ -552,11 +556,17 @@ function charSkill(){ // 角色主动技能：勇士=冲刺 学者=专注 商人
   if(S.skillCd>0) return;
   const c=SAVE.char||'warrior';
   if(c==='scholar'){ S.uberT=6; S.skillCd=15; S.texts.push({txt:'📖 专注！6秒必定暴击！',life:1.5}); AudioSys.sfx('lvl'); }
-  else if(c==='merchant'){ S.skillCd=120; openAirshop(); }
-  else if(c==='engineer'){ S.defs.push({id:'turret',x:S.px,y:S.py,cd:0,ang:0,temp:true,life:15}); S.skillCd=45; S.texts.push({txt:'🔧 临时炮台部署！',life:1.5}); AudioSys.sfx('coin'); }
+  else if(c==='merchant'){ const max=1+(S.keys.mer2||0); // 本局随时可放，次数=1+专属卡
+    if((S.airUsed||0)>=max){ S.texts.push({txt:'✈️ 本局召唤次数已用完',life:1.2}); return; }
+    S.airUsed=(S.airUsed||0)+1; openAirshop(); } // Boss不受清扫影响, 也不会被消灭
+  else if(c==='engineer'){ const two=(S.keys.eng2||0)>0;
+    S.defs.push({id:'turret',x:S.px,y:S.py,cd:0,ang:0,temp:true,life:15});
+    if(two) S.defs.push({id:'turret',x:S.px+28,y:S.py+18,cd:0,ang:0,temp:true,life:15}); // 专属：每次两个
+    S.skillCd=45; S.texts.push({txt:'🔧 临时炮台部署！'+(two?' ×2':''),life:1.5}); AudioSys.sfx('coin'); }
   else { if(S.dashCd>0||S.dashing>0) return;
-    S.dashing=0.16; S.dashInv=0.32; S.dashA=S.faceA||0;
-    S.skillCd=5*(1-0.2*S.keys.wind); }
+    const warr=(S.keys.warr||0)>0;
+    S.dashing=0.16; S.dashInv=warr?0.35:0.32; S.dashA=S.faceA||0; // 专属：冲刺全程无敌
+    S.skillCd=(warr?8:5)*(1-0.2*S.keys.wind); } // 专属：冷却+3s(5→8s)作为代价
 }
 function dash(){ /* 已并入 charSkill（勇士主动技能） */ }
 function hurtHero(d){
@@ -602,12 +612,12 @@ function killEnemy(e){
   if(e.type==='boss'){
     S.bossCount--;
     if(SAVE.char==='merchant') S.skillCd=0; // 商人：任意Boss死后立刻可召唤空中商店
-    if(e.gen<2 && !S.rushMode && e.bossType!=='qq' && e.bossType!=='pun' && e.bossType!=='necro'){ spawnBossChild(e.x,e.y,e.gen+1,e.maxhp,e); spawnBossChild(e.x,e.y,e.gen+1,e.maxhp,e); } // Rush不分裂, 保证波次能结束
+    if(e.gen<2 && e.bossType!=='qq' && e.bossType!=='pun' && e.bossType!=='necro'){ spawnBossChild(e.x,e.y,e.gen+1,e.maxhp,e); spawnBossChild(e.x,e.y,e.gen+1,e.maxhp,e); } // 大史莱姆死后分裂（Rush 也分裂, 保证波次能结束）
     if(S.bossCount===0){
       if(S.rushMode){
         S.rushN++; S.nextBossAt=S.t+3;
         S.texts.push({txt:'😈 第 '+S.rushN+' 波 Boss 3秒后到来！更强了！', life:2.5});
-      } else S.nextBossAt=S.t+120;
+      } else S.nextBossAt=S.t+150;
       S.texts.push({txt:'💥 BOSS 爆炸！清场！', life:2.5});
       S.stopT=0.5; // 击杀慢动作（手感）
       if(!S.rushMode){ S.pendComplete=true; S.pendAt=S.t; } // Rush不结算; 1.2s游戏时间后自动结算（选卡期间顺延, 不依赖setTimeout防节流）
@@ -628,7 +638,24 @@ function gainXP(v){
 function levelUp(){
   AudioSys.sfx('lvl');
   const wsel=SAVE.weapon||'gun';
-  let avail=UPGRADES.filter(u=>S.keys[u.id]<u.max && (!u.w||u.w===wsel) && (!u.def||S.defs.some(d=>d.id===u.def)) && ((u.id!=='tdmg'&&u.id!=='trate') || S.defs.some(d=>d.id==='turret')));
+  let avail=UPGRADES.filter(u=>S.keys[u.id]<u.max && !u.ch && (!u.w||u.w===wsel) && (!u.def||S.defs.some(d=>d.id===u.def)) && ((u.id!=='tdmg'&&u.id!=='trate') || S.defs.some(d=>d.id==='turret')));
+  // === 学者「博闻」：随机直接获得2张（不再三选一），带获得动画 ===
+  if((S.keys.sch2||0)>0){
+    const pool=avail.slice(); const got=[];
+    for(let i=0;i<2&&pool.length;i++){ const u=pool.splice(Math.random()*pool.length|0,1)[0];
+      S.keys[u.id]++; if(u.id==='hp'){ S.maxhp+=2; S.hp=S.maxhp; } got.push(u); }
+    S.choosing=false; ch.innerHTML='';
+    ovT.textContent='✨ 博闻触发！随机获得：';
+    const w2=document.createElement('div'); w2.style.cssText='display:flex; gap:10px; justify-content:center;';
+    for(const u of got){ const c2=document.createElement('div'); c2.className='card res-rise';
+      c2.innerHTML='<div class="ic">'+u.ic+'</div><div class="nm">'+u.nm+'</div><div class="ds">'+u.ds+'</div><div class="lv">Lv '+S.keys[u.id]+'</div>';
+      w2.appendChild(c2); }
+    ch.appendChild(w2);
+    const kb=document.createElement('button'); kb.textContent='继续'; kb.className='res-rise'; kb.style.animationDelay='0.3s';
+    kb.onclick=()=>{ ch.innerHTML=''; ov.classList.add('hidden'); loop(); };
+    ch.appendChild(kb);
+    ov.classList.remove('hidden'); ov.classList.remove('menu');
+    return; }
   if(SAVE.char==='engineer'){ const t1=avail.find(u=>u.id==='tdmg'), t2=avail.find(u=>u.id==='trate'); if(t1)avail.push(t1); if(t2)avail.push(t2); } // 工程师：机枪卡牌概率增高
   const picks=[];
   while(picks.length<3&&avail.length) picks.push(avail.splice(Math.random()*avail.length|0,1)[0]);
@@ -638,6 +665,9 @@ function levelUp(){
     picks[picks.length-1]=exclAvail[Math.random()*exclAvail.length|0];
   }
   S.exclDry=picks.some(u=>u.w)?0:(S.exclDry||0)+1;
+  // 角色专属卡：低概率出现（25%，仅限本角色）
+  const charEx=UPGRADES.filter(u=>u.ch===SAVE.char && S.keys[u.id]<u.max);
+  if(charEx.length && !picks.some(u=>u.ch) && Math.random()<0.25) picks[picks.length-1]=charEx[Math.random()*charEx.length|0];
   S.choosing=true;
   ch.innerHTML='';
   const p=document.createElement('p'); p.innerHTML='<b>⬆️ 升级！选择一项天赋</b>'; ch.appendChild(p);
@@ -791,8 +821,9 @@ function update(dt){
   S.dashCd-=dt; S.dashInv-=dt;
   S.skillCd=Math.max(0,S.skillCd-dt); S.uberT=Math.max(0,S.uberT-dt); // 角色技能冷却/学者专注
   if(S.dashing>0){ S.dashing-=dt;
-    S.px=Math.max(14,Math.min(WW-14,S.px+Math.cos(S.dashA)*560*dt));
-    S.py=Math.max(14,Math.min(WH-14,S.py+Math.sin(S.dashA)*560*dt));
+    const dashSp=(S.keys.warr||0)>0?760:560; // 斗士：冲刺更快
+    S.px=Math.max(14,Math.min(WW-14,S.px+Math.cos(S.dashA)*dashSp*dt));
+    S.py=Math.max(14,Math.min(WH-14,S.py+Math.sin(S.dashA)*dashSp*dt));
     S.moving=1;
     S.parts.push({x:S.px,y:S.py,vx:rand(-20,20),vy:rand(-20,20),life:0.3,color:'#9fe8f5',r:5});
   }
@@ -986,9 +1017,9 @@ function update(dt){
         let tgt=null,bd=280;
         for(const e of S.enemies){ const dd=dist(e,dfn); if(dd<bd){bd=dd;tgt=e;} }
         if(tgt){ dfn.ang=Math.atan2(tgt.y-dfn.y,tgt.x-dfn.x);
-          const tDmg=dfn.temp?playerDmg():(0.5*(1+0.5*S.keys.tdmg))*(SAVE.char==='engineer'?1.45:1); // 临时炮台伤害1×；工程师布防炮台+45%
+          const tDmg=dfn.temp?playerDmg()*(1+0.5*S.keys.tdmg):(0.5*(1+0.5*S.keys.tdmg))*(SAVE.char==='engineer'?1.45:1); // 临时炮台伤害1×且受火力卡影响；工程师布防炮台+45%
           S.bullets.push({x:dfn.x,y:dfn.y,vx:Math.cos(dfn.ang)*420,vy:Math.sin(dfn.ang)*420,life:1.2,pierce:0,hitset:new Set(),dmg0:tDmg});
-          dfn.cd=0.8/(1+0.2*S.keys.trate)/(dfn.temp?2:1)/((SAVE.char==='engineer'&&!dfn.temp)?1.3:1); }
+          dfn.cd=(dfn.temp?0.8/(1+0.2*S.keys.trate):0.8/(1+0.2*S.keys.trate))/(dfn.temp?2:1)/((SAVE.char==='engineer'&&!dfn.temp)?1.3:1); }
       }
     } else if(dfn.id==='spike'){
       const sR=120*(1+0.4*(S.keys.tspike||0)); // 尖刺扩容：范围+40%/级
@@ -1076,7 +1107,7 @@ function update(dt){
   // Boss 超时 3 分钟离开
   if(S.bossCount>0 && S.t-S.bossSpawnAt>=180){
     S.enemies=S.enemies.filter(e=>e.type!=='boss');
-    S.bossCount=0; S.nextBossAt=S.t+(S.rushMode?3:120);
+    S.bossCount=0; S.nextBossAt=S.t+(S.rushMode?3:150);
     S.texts.push({txt:'💨 BOSS 失去兴趣离开了', life:2.5});
   }
 
@@ -1094,11 +1125,11 @@ function update(dt){
 }
 function openAirshop(){
   S.paused=true; S.airDone=true;
-  // 飞行器清扫主角身边一小圈怪物
+  // 飞行器清扫主角身边一小圈怪物（Boss 不受影响；范围已缩小）
   let cleared=0;
-  for(const e of S.enemies){ if(e.type!=='boss'&&!e.dead&&dist(e,S)<160){ e.dead=true; cleared++; } }
+  for(const e of S.enemies){ if(e.type!=='boss'&&!e.dead&&dist(e,S)<90){ e.dead=true; cleared++; } }
   S.enemies=S.enemies.filter(e=>!e.dead);
-  if(cleared) S.parts.push({ring:true,x:S.px,y:S.py,r:0,max:160,life:0.4,maxlife:0.4});
+  if(cleared) S.parts.push({ring:true,x:S.px,y:S.py,r:0,max:90,life:0.4,maxlife:0.4});
   S.texts.push({txt:'🚁 空中商店抵达'+(cleared?'，清扫了 '+cleared+' 只怪物':''), life:1.5});
   ovT.textContent='🚁 空中商店';
   ovX.innerHTML='金币：<b>'+(SAVE.coins+S.coinsRun)+'</b>（含本局拾取 '+S.coinsRun+'；购买的道具立即布置在主角身边）';
