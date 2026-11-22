@@ -21,10 +21,14 @@
   #xpbar{position:absolute; bottom:0; left:0; right:0; height:0%; transition:height .15s; background:linear-gradient(0deg,#2fce5e,#7dff9e); box-shadow:0 0 10px rgba(76,224,122,.8);}
   #xptext{position:absolute; left:16px; top:50%; transform:translateY(-50%); writing-mode:vertical-rl; font-size:9px; font-weight:bold; color:#b8ffd2; opacity:.9; text-shadow:0 1px 2px #000; pointer-events:none;}
   /* ---- 覆盖层：手游主界面 ---- */
-  #overlay{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(8,14,28,.9); border-radius:14px; text-align:center; padding:18px; z-index:5; overflow-y:auto;}
+  #overlay{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(8,14,28,.9); border-radius:14px; text-align:center; padding:18px; z-index:5; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y;}
   #overlay.hidden{display:none;}
   #overlay.menu{background:radial-gradient(120% 90% at 50% 0%, #4a3a9e 0%, #2a1f6f 45%, #0e0a3a 100%); overflow-y:auto; justify-content:flex-start; padding-top:26px; -webkit-overflow-scrolling:touch; touch-action:pan-y;}
   #overlay.menu::before{content:''; position:absolute; inset:0; background:radial-gradient(60% 40% at 50% 108%, rgba(255,180,40,.18), transparent 70%); pointer-events:none;}
+  @keyframes ovPop{0%{transform:scale(.5);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+  @keyframes ovRise{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .res-pop{animation:ovPop .5s cubic-bezier(.2,1.5,.4,1) both;}
+  .res-rise{animation:ovRise .45s ease-out both;}
   #overlay h2{margin:0; font-size:clamp(22px,7vw,32px); font-weight:900; letter-spacing:3px;
     background:linear-gradient(180deg,#fff6cf 20%,#ffd76a 55%,#f7a916 90%);
     -webkit-background-clip:text; background-clip:text; color:transparent;
@@ -266,9 +270,6 @@ function openDailySign(){
   const s=document.createElement('button'); s.textContent='✅ 领取 '+base;
   s.onclick=()=>{ SAVE.coins+=base+gift; SAVE.lastSign=todayStr(); SAVE.signStreak=day; persist(); showPage('home'); };
   ch2.appendChild(s);
-  const d=document.createElement('button'); d.textContent='📺 看广告翻倍领 '+base*2;
-  d.onclick=()=>{ AdKit.showRewarded(()=>{ SAVE.coins+=(base+gift)*2; SAVE.lastSign=todayStr(); SAVE.signStreak=day; persist(); showPage('home'); }); };
-  ch2.appendChild(d);
   ov2.classList.remove('hidden','menu');
 }
 // ==================== 音频系统（WebAudio 程序化生成，零素材） ====================
@@ -565,6 +566,11 @@ function doNova(){
 }
 function killEnemy(e){
   e.dead=true; S.kills++;
+  // 连击系统：2.5秒内连续击杀累积，每10连击奖励金币
+  if((S.comboT||0)>0) S.combo=(S.combo||0)+1; else S.combo=1;
+  S.comboT=2.5;
+  if(S.combo>0 && S.combo%10===0){ const bonus=S.combo/2; // 10连+5、20连+10…
+    S.coinsRun+=bonus; S.texts.push({txt:'🔥 '+S.combo+' 连击！金币 +'+bonus, life:1.6}); AudioSys.sfx('lvl'); }
   if(SAVE.daily){ SAVE.daily.kills++; persist(); }
   if(!SAVE.stats) SAVE.stats={kills:0,best:0,maxLv:0};
   SAVE.stats.kills++;
@@ -599,7 +605,7 @@ function killEnemy(e){
       } else S.nextBossAt=S.t+120;
       S.texts.push({txt:'💥 BOSS 爆炸！清场！', life:2.5});
       S.stopT=0.5; // 击杀慢动作（手感）
-      if(!S.rushMode) setTimeout(()=>{ if(S&&!S.over&&!S.choosing) levelComplete(); }, 1200); // Rush模式不结算, 无限波次
+      if(!S.rushMode){ S.pendComplete=true; S.pendAt=S.t; } // Rush不结算; 1.2s游戏时间后自动结算（选卡期间顺延, 不依赖setTimeout防节流）
       S.shake=10; S.redT=0.15;
       S.parts.push({ring:true,x:e.x,y:e.y,r:0,max:Math.max(WW,WH),life:0.7,maxlife:0.7});
       for(const o of S.enemies){ if(o.type!=='boss'&&!o.dead){ o.dead=true; S.kills++;
@@ -1026,6 +1032,8 @@ function update(dt){
   for(const t of S.texts)t.life-=dt;
   S.texts=S.texts.filter(t=>t.life>0);
   S.hurtT=Math.max(0,S.hurtT-dt);
+  S.comboT=Math.max(0,(S.comboT||0)-dt); if(S.comboT<=0) S.combo=0; // 连击窗口
+  if(S.pendComplete&&!S.over&&!S.choosing&&S.t-(S.pendAt||0)>=1.2){ S.pendComplete=false; levelComplete(); return; } // Boss击杀延迟结算
   S.redT=Math.max(0,(S.redT||0)-dt);
   for(const n of S.dnums){ n.life-=dt; n.y+=n.vy*dt; n.vy*=0.92; }
   S.dnums=S.dnums.filter(n=>n.life>0);
@@ -1105,12 +1113,6 @@ function openAirshop(){
   if(total()<20||S.hp>=S.maxhp) b2.style.opacity=.5;
   b2.onclick=()=>{ if(total()<20||S.hp>=S.maxhp)return; spend(20); S.hp=S.maxhp; openAirshop(); };
   ch.appendChild(b2);
-  // ---- 空中商店广告点：缺钱时看广告领急用金币 ----
-  const b3=document.createElement('div'); b3.className='card';
-  b3.innerHTML='<div class="ic">📺</div><div class="nm">广告援助</div><div class="ds">看广告立刻获得 60 金币（每局1次）</div><div class="lv">'+(S.adAid?'✅ 已使用':'💰 +60')+'</div>';
-  if(S.adAid) b3.style.opacity=.5;
-  b3.onclick=()=>{ if(S.adAid)return; AdKit.showRewarded(()=>{ S.adAid=true; SAVE.coins+=60; persist(); coinEl.textContent=SAVE.coins+S.coinsRun; openAirshop(); }); };
-  ch.appendChild(b3);
   const go=document.createElement('button'); go.textContent='🚀 起飞返回战场';
   go.onclick=()=>{ S.paused=false; ov.classList.add('hidden'); ov.classList.remove('menu'); };
   ch.appendChild(go);
@@ -1123,9 +1125,9 @@ function gameOver(){
   if(!S.revived){
     ch.innerHTML='';
     ovT.textContent='💀 倒在了第 '+Math.floor(S.t)+' 秒';
-    ovX.innerHTML='击杀 '+S.kills+' · 等级 '+S.lvl+' · 已积累金币 '+S.coinsRun+'<br><br><b style="color:#ffd76a">看广告立即满血复活，本局继续！</b><br><span style="font-size:11px;color:#7285a8">每局限 1 次</span>';
-    const rv=document.createElement('button'); rv.textContent='📺 免费复活（看广告）';
-    rv.onclick=()=>{ AdKit.showRewarded(doRevive); };
+    ovX.innerHTML='击杀 '+S.kills+' · 等级 '+S.lvl+' · 已积累金币 '+S.coinsRun+'<br><br><b style="color:#ffd76a">满血复活，本局继续！</b><br><span style="font-size:11px;color:#7285a8">每局限 1 次</span>';
+    const rv=document.createElement('button'); rv.textContent='💖 满血复活（每局1次）';
+    rv.onclick=()=>doRevive();
     ch.appendChild(rv);
     const gv=document.createElement('button'); gv.textContent='🏃 放弃，去结算'; gv.style.background='#888'; gv.style.color='#fff';
     gv.onclick=()=>showDeathResults();
@@ -1151,15 +1153,22 @@ function showDeathResults(){
   SAVE.defense[selLevel]=[]; persist(); // 清空场上道具
   S._got=got; S._paid=false;
   ovT.textContent='💀 倒在了第 '+Math.floor(S.t)+' 秒';
-  ovX.innerHTML='击杀 <b>'+S.kills+'</b> · 等级 <b>'+S.lvl+'</b> · 金币 +'+got+'（现共 '+SAVE.coins+'）';
+  ovX.innerHTML='击杀 <b>'+S.kills+'</b> · 等级 <b>'+S.lvl+'</b> · 金币 +<b id="resCoins">0</b>（现共 '+SAVE.coins+'）';
   ch.innerHTML='';
-  // ---- 双倍结算广告点 ----
-  const db=document.createElement('button'); db.textContent='📺 广告领双倍金币 ×2';
-  db.onclick=()=>{ if(S._paid)return; AdKit.showRewarded(()=>{ if(S._paid)return; S._paid=true; SAVE.coins+=S._got; persist(); db.textContent='✅ 已双倍 +'+S._got; db.style.background='#2fce5e'; db.style.color='#fff'; coinEl.textContent=SAVE.coins+S.coinsRun; }); };
-  ch.appendChild(db);
   const hb=document.createElement('button'); hb.textContent='🏠 返回主页'; hb.style.background='#888'; hb.onclick=()=>showPage('home'); ch.appendChild(hb);
   const rb=document.createElement('button'); rb.textContent='🔁 再战第'+selLevel+'关'; rb.onclick=()=>startLevel(); ch.appendChild(rb);
+  playResultAnim(got);
   ov.classList.remove('hidden');
+}
+function playResultAnim(got){ // 结算动画：标题弹出 + 内容逐条浮现 + 金币滚动
+  ovT.classList.remove('res-pop'); void ovT.offsetWidth; ovT.classList.add('res-pop');
+  [...ch.children].forEach((el,i)=>{ el.classList.remove('res-rise'); void el.offsetWidth; el.classList.add('res-rise'); el.style.animationDelay=(0.2+i*0.12)+'s'; });
+  const coinEl2=document.getElementById('resCoins');
+  if(coinEl2&&got>0){ const t0=performance.now(), dur=800;
+    const tick=n=>{ const p=Math.min(1,(n-t0)/dur), ease=1-Math.pow(1-p,3);
+      coinEl2.textContent='+'+Math.round(got*ease);
+      if(p<1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick); }
 }
 
 // ---------- drawing ----------
@@ -1512,6 +1521,12 @@ function draw(){
     ctx.fillStyle='rgba(255,255,255,.8)'; ctx.beginPath(); ctx.arc(joy.bx+joy.dx,joy.by+joy.dy,13,0,7); ctx.fill();
   }
   S.texts.forEach((t,i)=>{ ctx.globalAlpha=Math.min(1,t.life); ctx.fillStyle='#ffd76a'; ctx.fillText(t.txt,W/2,H/2-50-i*26); ctx.globalAlpha=1; });
+  if((S.combo||0)>=5){ // 连击计数：右上角跳动显示
+    const pulse=1+Math.max(0,(S.comboT||0)-2.3)*2; // 刚击杀时放大
+    ctx.save(); ctx.translate(W-14,26); ctx.scale(pulse,pulse);
+    ctx.font='bold '+(12+Math.min(10,S.combo/20))+'px sans-serif'; ctx.textAlign='right';
+    ctx.fillStyle='rgba(255,170,60,'+Math.min(1,0.4+(S.comboT||0)/2.5).toFixed(2)+')';
+    ctx.fillText('🔥 '+S.combo+' 连击',0,0); ctx.restore(); ctx.textAlign='left'; }
   if(S.bossCount>0){ // 顶部Boss血条：名字+血量
     let by=16;
     for(const e of S.enemies){
@@ -1690,12 +1705,10 @@ function buildDaily(){
   if(OFFLINE_GIFT>0){
     const c=document.createElement('div'); c.id='offlineCard'; c.className='card';
     c.style.cssText='width:min(340px,88%); text-align:left;';
-    c.innerHTML='<div class="ic">💤</div><div class="nm">离线收益</div><div class="ds">你离开的这段时间，小人帮你打工赚了 <b style="color:#ffd76a">'+OFFLINE_GIFT+'</b> 金币！</div><div class="lv"><button class="mini">✅ 领取 '+OFFLINE_GIFT+'</button>　<button class="mini ad">📺 领双倍 '+(OFFLINE_GIFT*2)+'</button></div>';
-    const [bn,ba]=c.querySelectorAll('button');
+    c.innerHTML='<div class="ic">💤</div><div class="nm">离线收益</div><div class="ds">你离开的这段时间，小人帮你打工赚了 <b style="color:#ffd76a">'+OFFLINE_GIFT+'</b> 金币！</div><div class="lv"><button class="mini">✅ 领取 '+OFFLINE_GIFT+'</button></div>';
+    const bn=c.querySelectorAll('button')[0];
     bn.style.cssText='font-size:12px; padding:6px 10px; letter-spacing:0;';
-    ba.style.cssText=bn.style.cssText+'; background:linear-gradient(180deg,#7fe0ff,#3a9fe0);';
     bn.onclick=()=>{ SAVE.coins+=OFFLINE_GIFT; persist(); coinEl.textContent=SAVE.coins; OFFLINE_GIFT=0; c.remove(); }; // 领取后重置, 防止反复领取
-    ba.onclick=()=>AdKit.showRewarded(()=>{ SAVE.coins+=OFFLINE_GIFT*2; persist(); coinEl.textContent=SAVE.coins; OFFLINE_GIFT=0; c.remove(); });
     ch.appendChild(c);
   }
   ensureDaily();
@@ -1711,12 +1724,9 @@ function buildDaily(){
     const b=document.createElement('button');
     if(claimed){ b.textContent='✅ 已领'; b.style.cssText='font-size:11px; padding:4px 8px; background:#2a3a5e; color:#6a7590; box-shadow:none;'; }
     else if(done){
-      b.textContent='📺 领'+t.r*2; b.style.cssText='font-size:11px; padding:4px 8px; letter-spacing:0; background:linear-gradient(180deg,#7fe0ff,#3a9fe0); box-shadow:0 2px 0 #1f6fa8;';
-      b.onclick=()=>AdKit.showRewarded(()=>{ SAVE.daily.claimed[i]=true; SAVE.coins+=t.r*2; persist(); coinEl.textContent=SAVE.coins; showPage('reward'); });
-      const b2=document.createElement('button'); b2.textContent='领'+t.r;
-      b2.style.cssText='font-size:11px; padding:4px 8px;';
-      b2.onclick=()=>{ SAVE.daily.claimed[i]=true; SAVE.coins+=t.r; persist(); coinEl.textContent=SAVE.coins; showPage('reward'); };
-      row.appendChild(b); row.appendChild(b2);
+      b.textContent='领'+t.r; b.style.cssText='font-size:11px; padding:4px 8px; letter-spacing:0; background:linear-gradient(180deg,#7fe0ff,#3a9fe0); box-shadow:0 2px 0 #1f6fa8;';
+      b.onclick=()=>{ SAVE.daily.claimed[i]=true; SAVE.coins+=t.r; persist(); coinEl.textContent=SAVE.coins; showPage('reward'); };
+      row.appendChild(b);
     } else { b.textContent=prog; b.style.cssText='font-size:11px; padding:4px 8px; background:#2a3a5e; color:#6a7590; box-shadow:none;'; }
     row.appendChild(b);
     wrap.appendChild(row);
@@ -1736,12 +1746,9 @@ function buildDaily(){
     const b=document.createElement('button');
     if(claimed){ b.textContent='✅'; b.style.cssText='font-size:11px; padding:4px 8px; background:#2a3a5e; color:#6a7590; box-shadow:none;'; }
     else if(done){
-      b.textContent='📺 领'+t.r*2; b.style.cssText='font-size:11px; padding:4px 8px; letter-spacing:0; background:linear-gradient(180deg,#7fe0ff,#3a9fe0); box-shadow:0 2px 0 #1f6fa8;';
-      b.onclick=()=>AdKit.showRewarded(()=>{ SAVE.ach[t.id]=true; SAVE.coins+=t.r*2; persist(); coinEl.textContent=SAVE.coins; showPage('reward'); });
-      const b2=document.createElement('button'); b2.textContent='领'+t.r;
-      b2.style.cssText='font-size:11px; padding:4px 8px;';
-      b2.onclick=()=>{ SAVE.ach[t.id]=true; SAVE.coins+=t.r; persist(); coinEl.textContent=SAVE.coins; showPage('reward'); };
-      row.appendChild(b); row.appendChild(b2);
+      b.textContent='领'+t.r; b.style.cssText='font-size:11px; padding:4px 8px; letter-spacing:0; background:linear-gradient(180deg,#7fe0ff,#3a9fe0); box-shadow:0 2px 0 #1f6fa8;';
+      b.onclick=()=>{ SAVE.ach[t.id]=true; SAVE.coins+=t.r; persist(); coinEl.textContent=SAVE.coins; showPage('reward'); };
+      row.appendChild(b);
     } else { b.textContent='🔒'; b.style.cssText='font-size:11px; padding:4px 8px; background:#2a3a5e; color:#6a7590; box-shadow:none;'; }
     row.appendChild(b);
     aw.appendChild(row);
@@ -1754,11 +1761,10 @@ function showHomeExtras(){ // Boss Rush + 战绩（主页专属）
   if(!SAVE.rush||SAVE.rush.date!==todayStr()) SAVE.rush={date:todayStr(),used:0};
   const used=SAVE.rush.used||0, adLeft=Math.max(0,3-used);
   const rb=document.createElement('button');
-  rb.textContent='😈 Boss Rush · '+(used===0?'免费挑战 1 次':'📺 广告进入（今日剩 '+adLeft+' 次）');
+  rb.textContent='😈 Boss Rush · '+(used<3?'挑战（今日剩 '+(3-used)+' 次）':'今日次数已用完');
   rb.style.cssText='border-color:#e0609b; color:#ff9dc4; width:min(340px,88%);';
   rb.onclick=()=>{
-    if(used===0){ SAVE.rush.used=1; persist(); startRush(); }
-    else if(adLeft>0){ AdKit.showRewarded(()=>{ SAVE.rush.used=used+1; persist(); startRush(); }); }
+    if(used<3){ SAVE.rush.used=used+1; persist(); startRush(); }
     else { ovT.textContent='⚠️ 今日 Rush 次数已用完（3次）'; setTimeout(()=>ovT.textContent='像素幸存者',1200); }
   };
   ch.appendChild(rb);
@@ -1768,7 +1774,7 @@ function showHomeExtras(){ // Boss Rush + 战绩（主页专属）
   sb.onclick=()=>{
     const st=SAVE.stats||{kills:0,best:0,maxLv:0};
     ovT.textContent='📊 我的战绩';
-    ovX.innerHTML='💀 累计击杀：<b>'+st.kills+'</b><br>🌟 单局最高击杀：<b>'+st.best+'</b><br>👑 最高通关：<b>'+(st.maxLv?'第'+st.maxLv+'关':'未通关')+'</b><br>📺 今日广告次数：'+(SAVE.adToday||0)+'/5<br>📅 连续签到：<b>'+(SAVE.signStreak||0)+'</b> 天';
+    ovX.innerHTML='💀 累计击杀：<b>'+st.kills+'</b><br>🌟 单局最高击杀：<b>'+st.best+'</b><br>👑 最高通关：<b>'+(st.maxLv?'第'+st.maxLv+'关':'未通关')+'</b><br>📅 连续签到：<b>'+(SAVE.signStreak||0)+'</b> 天';
     ch.innerHTML='';
     const back=document.createElement('button'); back.textContent='返回'; back.onclick=()=>showPage('home'); ch.appendChild(back);
     ov.classList.remove('hidden');
@@ -2006,10 +2012,11 @@ function levelComplete(){
   SAVE.defense[selLevel]=[]; persist(); // 每关结束清空场上道具
   showPageHome=()=>showPage('home');
   ovT.textContent='🏆 第'+selLevel+'关 通关！';
-  ovX.innerHTML='金币 +'+(S.coinsRun+250)+'（含通关奖励250，现共 '+SAVE.coins+'）· 击杀 '+S.kills+' · 等级 '+S.lvl;
+  ovX.innerHTML='金币 +<b id="resCoins">0</b>（含通关奖励250，现共 '+SAVE.coins+'）· 击杀 '+S.kills+' · 等级 '+S.lvl;
   ch.innerHTML='';
   if(selLevel<5){ const nb=document.createElement('button'); nb.textContent='➡ 下一关'; nb.onclick=()=>{ selLevel++; startLevel(); }; ch.appendChild(nb); }
   const hb=document.createElement('button'); hb.textContent='🏠 返回主页'; hb.style.background='#888'; hb.onclick=()=>showPage('home'); ch.appendChild(hb);
+  playResultAnim(S.coinsRun+250);
   ov.classList.remove('hidden');
 }
 showPage('home');
