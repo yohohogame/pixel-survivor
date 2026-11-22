@@ -832,10 +832,19 @@ const touchBtn=(el,fn)=>{ if(!el) return; el.addEventListener('touchstart',e=>{ 
 let raf=null, lastT=0;
 function loop(){ cancelAnimationFrame(raf); lastT=performance.now(); raf=requestAnimationFrame(frame); }
 function frame(now){
+  try{
   const dt=Math.min((now-lastT)/1000,0.05); lastT=now;
   if(S&&!S.over&&!S.choosing&&!S.paused) update(dt);
   draw();
   if(S&&!S.over) raf=requestAnimationFrame(frame);
+  }catch(err){ // 黑匣子：战斗中崩溃直接把报错写到屏幕上，方便定位
+    const t2=document.getElementById('ovTitle'), x2=document.getElementById('ovText'), c2=document.getElementById('choices'), o2=document.getElementById('overlay');
+    if(t2){ t2.textContent='⚠️ 游戏遇到错误（请截图发给开发者）';
+      x2.innerHTML='<div style="text-align:left; font-size:11px; color:#ffb4b4; white-space:pre-wrap; max-height:50vh; overflow:auto;">'+(err&&err.stack||err)+'</div>';
+      c2.innerHTML=''; const bb=document.createElement('button'); bb.textContent='🏠 回主页'; bb.onclick=()=>{ showPage('home'); }; c2.appendChild(bb);
+      o2.classList.remove('hidden'); }
+    S=null; AudioSys.stopMusic();
+  }
 }
 function update(dt){
   S.t+=dt; S.walkT+=dt;
@@ -2122,7 +2131,7 @@ function buildDefend(){
         if(SAVE.tut===3&&it.id!=='turret'){ setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),1200); ovT.textContent='教程：先拖动机枪（炮塔）到地图上'; return; }
         SAVE.coins-=curCost(); arr.push({id:it.id,x:Math.round(x),y:Math.round(y)}); persist(); buildDefend();
         // ---- 教程：布防两个机枪后引导出战 ----
-        if(SAVE.tut===3&&arr.filter(d=>d.id==='turret').length>=2){ SAVE.tut=4; persist(); ovT.textContent='✅ 教程完成！点下方「出战第1关」开始战斗'; Spot.show([navPlay],'教程完成！点击出战第1关！'); }
+        if(SAVE.tut===3&&arr.filter(d=>d.id==='turret').length>=2){ SAVE.tut=4; SAVE.tutDone=1; persist(); ovT.textContent='✅ 教程完成！点下方「出战第1关」开始战斗'; Spot.show([navPlay],'教程完成！点击出战第1关！'); }
       };
       document.addEventListener('mousemove',mv); document.addEventListener('mouseup',fin);
       document.addEventListener('touchmove',mv,{passive:false}); document.addEventListener('touchend',fin);
@@ -2155,7 +2164,7 @@ function buildDefend(){
   ch.appendChild(map);
   // 聚光灯：教程中照住「自动炮塔按钮」+「地图」；完成后照住「出战」按钮
   if(SAVE.tut===3){ const tBtn=bar.querySelector('button'); if(tBtn) Spot.show([tBtn,map],'按住「自动炮塔 🔫」拖到地图上松手，放两个'); }
-  else if(SAVE.tut===4&&arr.length){ Spot.show([navPlay],'教程完成！点击出战第1关！'); }
+  else if(SAVE.tut===4&&arr.length&&!SAVE.tutDone){ SAVE.tutDone=1; persist(); Spot.show([navPlay],'教程完成！点击出战第1关！'); } // 仅补示一次（老档），不重复点亮
 }
 function renderShop(){
   for(const it of SHOP_ITEMS){
