@@ -209,6 +209,7 @@ try{
 if(SAVE.sound===undefined) SAVE.sound=true;
 // ---- 新手教程状态：0=未开始 1=🎭选角武器 2=商店买装甲 3=布防放两个炮塔 4=完成 ----
 if(SAVE.tut===undefined) SAVE.tut=0;
+if(SAVE.tut===3&&(SAVE.stats&&SAVE.stats.maxLv>0)&&SAVE.tutDone===undefined){ SAVE.tut=4; SAVE.tutDone=1; } // 旧存档兼容：旧教程的「3=完成」直接迁到新「4=完成」，防止老玩家被重新拉进教程指引
 // ==================== 聚光灯引导引擎 ====================
 // 用 clip-path 在暗色遮罩上"挖洞"：洞外变暗且不可点，洞内元素正常交互
 let dragCleanup=null; // 布防拖拽的全局清理句柄（页面切换/touchcancel 时调用）
