@@ -96,7 +96,7 @@
   /* ---- 三选一：固定布局，不随屏幕宽度漂移 ---- */
   .pickwrap{display:flex; gap:12px; justify-content:center; align-items:stretch; width:100%; max-width:560px;}
   .pickwrap .card{flex:1 1 0; min-width:0; width:auto; display:flex; flex-direction:column;}
-  @media(max-width:560px){ .pickwrap{flex-direction:column; max-width:300px; width:88%;} .pickwrap .card{width:100%;} }
+  @media(max-width:560px){ .pickwrap{flex-direction:column; max-width:300px; width:88%;} .pickwrap .card{width:100%; flex:0 0 auto; height:auto;} }
   /* ---- 角色武器选择页 ---- */
   .rosterRow{width:100%; height:calc(100dvh/6); max-height:110px; display:flex; align-items:center; gap:14px; border-radius:16px;
     background:linear-gradient(180deg,rgba(44,58,110,.85),rgba(22,30,64,.9)); border:1.5px solid var(--glassbd); padding:0 18px;
@@ -207,7 +207,7 @@ try{
   ensureDaily();
 }catch(e){}
 if(SAVE.sound===undefined) SAVE.sound=true;
-// ---- 新手教程状态：0=未开始 1=去商店买血量 2=布防放两个机枪 3=完成 ----
+// ---- 新手教程状态：0=未开始 1=🎭选角武器 2=商店买装甲 3=布防放两个炮塔 4=完成 ----
 if(SAVE.tut===undefined) SAVE.tut=0;
 // ==================== 聚光灯引导引擎 ====================
 // 用 clip-path 在暗色遮罩上"挖洞"：洞外变暗且不可点，洞内元素正常交互
@@ -218,8 +218,11 @@ const Spot={
     this.hide();
     if(!targets||!targets.length) return;
     const pad=8, W=window.innerWidth, H=window.innerHeight;
+    let offscreen=false;
     for(const t of targets){ const r=t.getBoundingClientRect();
-      if(r.bottom<0||r.top>H||r.right<0||r.left>W) t.scrollIntoView({block:'center'}); }
+      if(r.bottom<0||r.top>H||r.right<0||r.left>W){ offscreen=true; t.scrollIntoView({block:'center'}); } }
+    if(offscreen){ // 滚动生效后再重新测量，否则洞会画在错误位置
+      const args=[targets,text]; setTimeout(()=>{ this.show.apply(this,args); },160); return; }
     const rects=targets.map(t=>{ const r=t.getBoundingClientRect();
       return [Math.max(0,r.left-pad),Math.max(0,r.top-pad),Math.min(W,r.right+pad),Math.min(H,r.bottom+pad)]; });
     const wrap=document.createElement('div');
@@ -252,8 +255,13 @@ const Spot={
     wrap.appendChild(label);
     document.body.appendChild(wrap);
     this.wrap=wrap;
+    // 浮层滚动跟随：滚动手后重新定位洞口（防滚动后错位）
+    if(this._onScroll){ ov.removeEventListener('scroll',this._onScroll); this._onScroll=null; }
+    const args=[targets,text]; this._lastArgs=args;
+    this._onScroll=()=>{ clearTimeout(this._st); this._st=setTimeout(()=>{ if(this.wrap&&this._lastArgs) this.show.apply(this,this._lastArgs); },140); };
+    ov.addEventListener('scroll',this._onScroll);
   },
-  hide(){ if(this.wrap){ this.wrap.remove(); this.wrap=null; } }
+  hide(){ if(this._onScroll){ ov.removeEventListener('scroll',this._onScroll); this._onScroll=null; } clearTimeout(this._st); if(this.wrap){ this.wrap.remove(); this.wrap=null; } }
 };
 // 聚光灯呼吸动画
 const spotStyle=document.createElement('style');
@@ -1746,14 +1754,22 @@ const PAGES={
     title:'选择关卡',
     text:()=>'金币：<b>'+SAVE.coins+'</b> · 难度逐关提升 · 点选关卡后先布防',
     nav:{shop:'🛒 商店', play:'🛠 布防', playGo:'defend'},
-    render(){ if(SAVE.tut>=1&&SAVE.tut<=3) pickRows(); // 教程期保留选角引导；平时选角走「🎭 角色」页
-      renderLevelList(); rushEntry(); }
+    render(){ renderLevelList(); rushEntry(); } // 教程选角已迁移至「🎭 角色」页
   },
   roster:{
     title:'🎭 角色与武器',
     text:()=>'点角色或武器查看详情并确定选择',
     nav:{shop:'🛒 商店', play:'▶ 开始战斗', playGo:'select'},
-    render(){ renderRoster(); }
+    render(){
+      renderRoster();
+      if(SAVE.tut>=1&&SAVE.tut<=3){ const sk=document.createElement('button'); // 教程可跳过, 防死锁
+        sk.textContent='⏭ 跳过教程';
+        sk.style.cssText='font-size:12px; width:min(340px,88%); margin-top:6px; background:#2a3a5e; color:#9fb4dd; box-shadow:0 2px 0 #16244a;';
+        sk.onclick=()=>{ SAVE.tut=4; persist(); Spot.hide(); showPage('home'); };
+        ch.appendChild(sk); }
+      if(SAVE.tut===1){ const rows=ch.querySelectorAll('.rosterRow');
+        if(rows[0]) Spot.show([rows[0]],'教程 1/3：点角色或武器查看详情，点「确定」选择（点旁边空白返回不选）'); }
+    }
   },
   defend:{
     title:()=>'🛠 战前布防 · 第'+selLevel+'关',
@@ -1910,15 +1926,15 @@ function showHomeLevels(){
     sk.onclick=()=>{ SAVE.tut=4; persist(); Spot.hide(); showPage('home'); };
     ch.appendChild(sk); }
   // ---- 聚光灯指引 ----
-  if(SAVE.tut===1){ Spot.show([navShop],'第一步：点击进入「商店」');
+  if(SAVE.tut===2){ Spot.show([navShop],'第二步：点击进入「商店」');
     const t=document.createElement('p');
-    t.innerHTML='<b style="color:#ffd76a">📖 教程 1/2</b>：购买一次「装甲强化 ❤️」';
+    t.innerHTML='<b style="color:#ffd76a">📖 教程 2/3</b>：购买一次「装甲强化 ❤️」';
     t.style.cssText='font-size:13px; color:#ffe9b8; margin:0;';
     ch.appendChild(t);
-  }else if(SAVE.tut===2){ Spot.show([navPlay],'第二步：选择关卡后进入「布防」'); }
+  }else if(SAVE.tut===3){ Spot.show([navPlay],'第三步：选择关卡后进入「布防」'); }
   // 教程期间非指引按钮全部置灰
-  navPlay.classList[SAVE.tut===1?'add':'remove']('tutdim');
-  navShop.classList[SAVE.tut===2?'add':'remove']('tutdim');
+  navPlay.classList[SAVE.tut===2?'add':'remove']('tutdim');
+  navShop.classList[SAVE.tut===3?'add':'remove']('tutdim');
   // ---- 每日签到（已移入奖励中心，主页不再显示入口） ----
   for(let i=1;i<=5;i++){
     const locked=i>SAVE.unlocked;
@@ -1966,7 +1982,9 @@ function showRosterDetail(key,it){ // 详情页：大图+完整介绍+确定按�
   const ok=document.createElement('button');
   ok.textContent='✅ 确定'+(SAVE[key]===it.id?'（当前使用中）':'');
   ok.style.cssText='margin-top:14px; width:100%;';
-  ok.onclick=(e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); SAVE[key]=it.id; persist(); ovT.textContent='✅ 已选择：'+it.nm; showPage('roster'); };
+  ok.onclick=(e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); SAVE[key]=it.id; persist();
+    if(SAVE.tut===1){ SAVE.tut=2; persist(); ovT.textContent='✅ 已选择：'+it.nm; showPage('home'); return; } // 教程完成后进入商店步骤
+    ovT.textContent='✅ 已选择：'+it.nm; showPage('roster'); };
   box.appendChild(ok);
   ch.appendChild(box);
   const back=(e)=>{ if(myGen!==rosterGen) return; // 已离开本详情页（世代号失效），监听作废
@@ -2026,7 +2044,7 @@ function renderLevelList(){
     const b=document.createElement('button');
     b.textContent=(locked?'🔒 ':'▶ ')+['第一关','第二关','第三关','第四关','第五关'][i-1];
     if(locked) b.className='locked';
-    if(SAVE.tut===2) b.classList.add('tutdim'); // 教程期灰色，不可点
+    if(SAVE.tut===3) b.classList.add('tutdim'); // 教程期灰色，不可点
     if(i===selLevel) b.className+=' sel';
     if(!locked) b.onclick=()=>{
       selLevel=i; pickMade=true;
@@ -2039,7 +2057,7 @@ function renderLevelList(){
   ch.appendChild(list);
   const tip=document.createElement('p'); tip.textContent='\u2191 \u70b9\u9009\u5173\u5361\uff0c\u518d\u70b9\u4e0b\u65b9\u300c\u5e03\u9632\u300d'; tip.style.cssText='font-size:11px; color:rgba(255,255,255,.6); margin:4px 0 0;';
   ch.appendChild(tip);
-  if(SAVE.tut===2) Spot.show([navPlay],'选好关卡后点击这里进入「布防」');
+  if(SAVE.tut===3) Spot.show([navPlay],'选好关卡后点击这里进入「布防」');
   // （Boss测试入口已按需求移除）
 }
 const DEF_DETAIL={turret:['自动炮塔','280 范围内自动索敌射击，基础伤害 0.5（不受主角伤害加成影响）。可在升级时用「炮塔火力/炮塔射速」强化。'], spike:['尖刺陷阱','半径 80 内的怪物每 0.5 秒受到一次伤害，适合放在刷怪路口。'], totem:['治疗图腾','半径 150 内每 9 秒为回复 1 点生命；满血时充能完毕（外圈呼吸光提示）。'], slow:['寒冰力场','半径 150 内的怪物移速降低 45%，和尖刺放一起效果极佳。']};
@@ -2048,7 +2066,7 @@ function showDefDetail(it){
   const info=DEF_DETAIL[it.id]||['','',it.ds];
   const d=document.createElement('div'); d.id='defdetail';
   d.style.cssText='width:min(340px,88%); background:linear-gradient(180deg,rgba(36,54,94,.95),rgba(27,42,74,.95)); border:1.5px solid rgba(255,180,40,.5); border-radius:12px; padding:10px 14px; text-align:left; font-size:12px; color:#cfdcff; line-height:1.6; box-shadow:0 6px 16px rgba(0,0,0,.4); position:relative;';
-  d.innerHTML='<b style="color:#ffd76a; font-size:14px;">'+it.ic+' '+info[0]+'</b>　<span style="color:#9fb0d0;">当前价 💰'+Math.round(it.cost*(1+0.5*(SAVE.defense[selLevel]||[]).filter(x=>x.id===it.id).length))+'（越买越贵）</span><br>'+info[1]+'<br><span style="color:#8fa3c8;">已布置 '+(SAVE.defense[selLevel]||[]).filter(x=>x.id===it.id).length+' 个 · 按住拖到地图上松手购买，点已布置的图标拆除（返还50%）</span>';
+  d.innerHTML='<b style="color:#ffd76a; font-size:14px;">'+it.ic+' '+info[0]+'</b>　<span style="color:#9fb0d0;">当前价 💰'+((it.id==='turret'&&SAVE.tut===3)?it.cost:Math.round(it.cost*(1+0.5*(SAVE.defense[selLevel]||[]).filter(x=>x.id===it.id).length)))+'（越买越贵）</span><br>'+info[1]+'<br><span style="color:#8fa3c8;">已布置 '+(SAVE.defense[selLevel]||[]).filter(x=>x.id===it.id).length+' 个 · 按住拖到地图上松手购买，点已布置的图标拆除（返还50%）</span>';
   d.onclick=()=>d.remove();
   const bar=document.getElementById('choices').querySelector('div');
   if(old) old.remove();
@@ -2062,9 +2080,10 @@ function buildDefend(){
   const bar=document.createElement('div'); bar.style.cssText='display:flex; gap:8px; flex-wrap:wrap; justify-content:center; position:relative;';
   for(const it of DEF_ITEMS){
     const b=document.createElement('button');
-    b.textContent=it.ic+' '+it.nm+' 💰'+Math.round(it.cost*(1+0.5*arr.filter(d=>d.id===it.id).length)); // 越买越贵
+    const tutFix=(id)=>id==='turret'&&SAVE.tut===3; // 教程期炮塔不加价
+    b.textContent=it.ic+' '+it.nm+' 💰'+(tutFix(it.id)?it.cost:Math.round(it.cost*(1+0.5*arr.filter(d=>d.id===it.id).length))); // 越买越贵（教程期炮塔固定价）
     b.style.cssText='font-size:13px; padding:8px 12px; letter-spacing:0; box-shadow:0 2px 0 #8a4a00;'+(defSel===it.id?' border:2px solid #ffd76a;':'');
-    if(SAVE.tut===2&&it.id!=='turret') b.classList.add('tutdim'); else b.classList.remove('tutdim');
+    if(SAVE.tut===3&&it.id!=='turret') b.classList.add('tutdim'); else b.classList.remove('tutdim');
     const beginDrag=ev=>{
       ev.preventDefault();
       const tp=t=>{ const p=t.changedTouches?t.changedTouches[0]:(t.touches&&t.touches[0])||t; return p; };
@@ -2078,7 +2097,8 @@ function buildDefend(){
       ghost.style.left=sp.clientX+'px'; ghost.style.top=sp.clientY+'px';
       document.body.appendChild(ghost);
       const st=document.getElementById('defstatus');
-      const curCost=()=>Math.round(it.cost*(1+0.5*arr.filter(d=>d.id===it.id).length));
+      const curCost=()=>{ const n=arr.filter(d=>d.id===it.id).length; if(SAVE.tut===3&&it.id==='turret') return it.cost; // 教程期炮塔不加价：新手100金币买装甲后刚好够放两个
+        return Math.round(it.cost*(1+0.5*n)); };
       const upd=()=>{ st.textContent='拖到地图上松手布置「'+it.nm+'」 · 金币 '+SAVE.coins+' − '+curCost()+' = '+(SAVE.coins-curCost())+'（同类越多越贵）'; };
       upd();
       const mv=e=>{ const p=tp(e); ghost.style.left=p.clientX+'px'; ghost.style.top=p.clientY+'px'; if(e.cancelable&&e.touches) e.preventDefault(); };
@@ -2099,10 +2119,10 @@ function buildDefend(){
         // ---- 防刷金币：同一位置同类道具禁止重复放置；每类最多4个 ----
         if(arr.some(d=>d.id===it.id&&Math.hypot(d.x-x,d.y-y)<30)){ setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),900); ovT.textContent='⚠️ 这个位置已经有「'+it.nm+'」了'; return; }
         if(arr.filter(d=>d.id===it.id).length>=4){ setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),900); ovT.textContent='⚠️ 「'+it.nm+'」每关最多布置4个'; return; }
-        if(SAVE.tut===2&&it.id!=='turret'){ setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),1200); ovT.textContent='教程：先拖动机枪（炮塔）到地图上'; return; }
+        if(SAVE.tut===3&&it.id!=='turret'){ setTimeout(()=>ovT.textContent=((()=>{const Q=PAGES.defend;return typeof Q.title==='function'?Q.title():Q.title;}))(),1200); ovT.textContent='教程：先拖动机枪（炮塔）到地图上'; return; }
         SAVE.coins-=curCost(); arr.push({id:it.id,x:Math.round(x),y:Math.round(y)}); persist(); buildDefend();
         // ---- 教程：布防两个机枪后引导出战 ----
-        if(SAVE.tut===2&&arr.filter(d=>d.id==='turret').length>=2){ SAVE.tut=3; persist(); ovT.textContent='✅ 教程完成！点下方「出战第1关」开始战斗'; Spot.show([navPlay],'教程完成！点击出战第1关！'); }
+        if(SAVE.tut===3&&arr.filter(d=>d.id==='turret').length>=2){ SAVE.tut=4; persist(); ovT.textContent='✅ 教程完成！点下方「出战第1关」开始战斗'; Spot.show([navPlay],'教程完成！点击出战第1关！'); }
       };
       document.addEventListener('mousemove',mv); document.addEventListener('mouseup',fin);
       document.addEventListener('touchmove',mv,{passive:false}); document.addEventListener('touchend',fin);
@@ -2118,7 +2138,7 @@ function buildDefend(){
   }
   ch.appendChild(bar);
   const st0=document.createElement('p'); st0.id='defstatus';
-  st0.textContent=(SAVE.tut===2?'📖 教程：拖「自动炮塔 🔫」到地图上，放两个（新手100金币够买2个） · ':'按住道具拖到地图上松手购买 · ')+'当前金币 '+SAVE.coins+' · 已布置 '+arr.length+'/8';
+  st0.textContent=(SAVE.tut===3?'📖 教程：拖「自动炮塔 🔫」到地图上，放两个（新手100金币够买2个） · ':'按住道具拖到地图上松手购买 · ')+'当前金币 '+SAVE.coins+' · 已布置 '+arr.length+'/8';
   ch.appendChild(st0);
   const map=document.createElement('div');
   map.style.cssText='position:relative; width:min(340px,88%); aspect-ratio:1600/1040; background:linear-gradient(160deg,#14213d,#0d1730); border:2px solid rgba(255,255,255,.2); border-radius:12px; cursor:crosshair; overflow:hidden;';
@@ -2134,8 +2154,8 @@ function buildDefend(){
   }
   ch.appendChild(map);
   // 聚光灯：教程中照住「自动炮塔按钮」+「地图」；完成后照住「出战」按钮
-  if(SAVE.tut===2){ const tBtn=bar.querySelector('button'); if(tBtn) Spot.show([tBtn,map],'按住「自动炮塔 🔫」拖到地图上松手，放两个'); }
-  else if(SAVE.tut===3&&arr.length){ Spot.show([navPlay],'教程完成！点击出战第1关！'); }
+  if(SAVE.tut===3){ const tBtn=bar.querySelector('button'); if(tBtn) Spot.show([tBtn,map],'按住「自动炮塔 🔫」拖到地图上松手，放两个'); }
+  else if(SAVE.tut===4&&arr.length){ Spot.show([navPlay],'教程完成！点击出战第1关！'); }
 }
 function renderShop(){
   for(const it of SHOP_ITEMS){
@@ -2143,13 +2163,13 @@ function renderShop(){
     const c=document.createElement('div'); c.className='card';
     c.innerHTML='<div class="ic">'+it.ic+'</div><div class="nm">'+it.nm+' Lv'+l+'/'+it.max+'</div><div class="ds">'+it.ds+'</div><div class="lv">'+(maxed?'✅ 已满级':'💰 '+cost+' 购买')+'</div>';
     if(maxed){ c.style.opacity=.5; }
-    else if(SAVE.tut===1&&it.id!=='hp'){ c.style.opacity=.3; c.onclick=()=>{ ovT.textContent='教程：先购买「装甲强化」❤️'; setTimeout(()=>{ovT.textContent='🛒 永久商店';},1000); }; }
+    else if(SAVE.tut===2&&it.id!=='hp'){ c.style.opacity=.3; c.onclick=()=>{ ovT.textContent='教程：先购买「装甲强化」❤️'; setTimeout(()=>{ovT.textContent='🛒 永久商店';},1000); }; }
     else c.onclick=()=>{ if(SAVE.coins>=cost){ SAVE.coins-=cost; SAVE.up[it.id]++; persist();
-        if(SAVE.tut===1&&it.id==='hp'){ SAVE.tut=2; persist(); showPage('home'); } else showPage('shop'); } };
+        if(SAVE.tut===2&&it.id==='hp'){ SAVE.tut=3; persist(); showPage('home'); } else showPage('shop'); } };
     ch.appendChild(c);
   }
   // 聚光灯：教程阶段只准买装甲强化
-  if(SAVE.tut===1){ const cards=ch.querySelectorAll('.card'); if(cards[1]) Spot.show([cards[1]],'点击购买「装甲强化 ❤️」'); }
+  if(SAVE.tut===2){ const cards=ch.querySelectorAll('.card'); if(cards[1]) Spot.show([cards[1]],'点击购买「装甲强化 ❤️」'); }
 }
 
 function startLevel(){ testBoss=null; rushOn=false; nav.classList.add('hidden'); startGame(); }
@@ -2202,7 +2222,7 @@ if(SAVE.tut===0){
     ovX2.innerHTML='新手礼包：<b>100 金币</b><br><br>接下来跟着教程学会强化和布防，轻松打赢第一关！';
     ch2.innerHTML='';
     const b=document.createElement('button'); b.textContent='🎁 领取 100 金币，开始教程';
-    b.onclick=()=>{ SAVE.coins+=100; SAVE.tut=1; persist(); coinEl.textContent=SAVE.coins; showPage('home'); };
+    b.onclick=()=>{ SAVE.coins+=100; SAVE.tut=1; persist(); coinEl.textContent=SAVE.coins; showPage('roster'); }; // 教程第一步：选择角色与武器
     ch2.appendChild(b);
     ov2.classList.remove('hidden','menu');
   },400);
