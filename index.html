@@ -93,6 +93,26 @@
   #lvlist button.locked{background:#111624; color:#6a7590; border-color:#222a3e; box-shadow:0 3px 0 rgba(5,10,24,.9); filter:saturate(.4);}
   #lvlist button.sel{border-color:#4ce07a; color:#b8ffd2; box-shadow:0 4px 0 rgba(5,10,24,.9), 0 0 14px rgba(76,224,122,.35);}
   .hint{margin-top:8px; text-align:center; font-size:12px; color:#7285a8; position:relative;}
+  /* ---- 三选一：固定布局，不随屏幕宽度漂移 ---- */
+  .pickwrap{display:flex; gap:12px; justify-content:center; align-items:stretch; width:100%; max-width:560px;}
+  .pickwrap .card{flex:1 1 0; min-width:0; width:auto; display:flex; flex-direction:column;}
+  @media(max-width:560px){ .pickwrap{flex-direction:column; max-width:300px; width:88%;} .pickwrap .card{width:100%;} }
+  /* ---- 角色武器选择页 ---- */
+  .rosterRow{width:100%; height:calc(100dvh/6); max-height:110px; display:flex; align-items:center; gap:14px; border-radius:16px;
+    background:linear-gradient(180deg,rgba(44,58,110,.85),rgba(22,30,64,.9)); border:1.5px solid var(--glassbd); padding:0 18px;
+    cursor:pointer; pointer-events:auto; box-shadow:0 6px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.1); transition:transform .12s, border-color .12s, box-shadow .12s; position:relative;}
+  .rosterRow:active{transform:scale(.98);}
+  .rosterRow .thumb{font-size:34px; width:64px; height:64px; line-height:64px; text-align:center; border-radius:50%; flex:0 0 auto;
+    background:radial-gradient(circle at 35% 30%, rgba(255,255,255,.22), rgba(10,16,40,.55) 70%); border:1px solid rgba(255,255,255,.18);
+    box-shadow:inset 0 2px 4px rgba(255,255,255,.12), 0 3px 8px rgba(0,0,0,.4);}
+  .rosterRow .rnm{font-size:18px; font-weight:900; letter-spacing:2px;}
+  .rosterRow .cur{margin-left:auto; font-size:12px; color:#ffd76a; letter-spacing:1px;}
+  .rosterRow.sel{border-color:#ffd76a; box-shadow:0 6px 16px rgba(0,0,0,.4), 0 0 14px rgba(255,215,106,.35), inset 0 1px 0 rgba(255,255,255,.1);}
+  #dtBox{width:min(360px,92%); background:linear-gradient(180deg,rgba(44,58,110,.92),rgba(20,28,60,.96)); backdrop-filter:blur(8px);
+    border:1.5px solid rgba(255,215,106,.45); border-radius:18px; padding:18px; pointer-events:auto; box-shadow:0 12px 34px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.12);}
+  #dtBox .ic{font-size:56px; width:96px; height:96px; line-height:96px; margin:0 auto;}
+  #dtBox .nm{font-size:20px; font-weight:900; letter-spacing:2px; margin:10px 0 6px; color:#ffe9b8;}
+  #dtBox .ds{font-size:13px; color:var(--muted); line-height:1.8; text-align:left;}
 </style>
 </head>
 <body>
@@ -117,6 +137,7 @@
   <button id="dashBtn" class="hidden" style="position:absolute; bottom:14px; right:8px; z-index:4; padding:8px 14px; font-size:16px;">⚡</button>
   <div id="nav" class="hidden">
     <button id="navShop">🛒 商店</button>
+    <button id="navRoster">🎭 角色</button>
     <button id="navReward">🎁 奖励</button>
     <button id="navPlay">▶ 开始战斗</button>
   </div>
@@ -140,7 +161,8 @@ let DPR=1;
 })();
 const W=cv._lw, H=cv._lh;
 const WW=W*2, WH=H*2; // 世界是屏幕的2倍
-const ov=document.getElementById('overlay'), ovT=document.getElementById('ovTitle'), ovX=document.getElementById('ovText'), ch=document.getElementById('choices'), btn=document.getElementById('btn'), pauseBtn=document.getElementById('pauseBtn'), nav=document.getElementById('nav'), navShop=document.getElementById('navShop'), navReward=document.getElementById('navReward'), navPlay=document.getElementById('navPlay'), dashBtn=document.getElementById('dashBtn');
+const ov=document.getElementById('overlay'), ovT=document.getElementById('ovTitle'), ovX=document.getElementById('ovText'), ch=document.getElementById('choices'), btn=document.getElementById('btn'), pauseBtn=document.getElementById('pauseBtn'), nav=document.getElementById('nav'), navShop=document.getElementById('navShop'), navRoster=document.getElementById('navRoster'), navReward=document.getElementById('navReward'), navPlay=document.getElementById('navPlay'), dashBtn=document.getElementById('dashBtn');
+let dtBack=null; // 详情页点击空白退出的监听句柄
 const hpEl=document.getElementById('hp'), tEl=document.getElementById('time'), xpEl=document.getElementById('xpbar'), xpNextEl=document.getElementById('xptext'), coinEl=document.getElementById('coin');
 const rand=(a,b)=>a+Math.random()*(b-a);
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
@@ -414,7 +436,7 @@ function startGame(){
      keys:{dmg:0,rate:0,multi:0,pierce:0,spd:0,hp:0,magnet:0,orbit:0,nova:0,regen:0,crit:0,xp:0,tdmg:0,trate:0,homing:0,blast:0,shield:0,thorn:0,wind:0,rktr:0,fire:0,blr:0,shrap:0,theal:0,tslow:0,tspike:0,warr:0,sch2:0,mer2:0,eng2:0},
      dashCd:0, dashing:0, dashInv:0, dashA:0, shieldT:0, thornT:0, volleyPending:0, volleyT:0, skillCd:0, uberT:0,
      bullets:[], enemies:[], gems:[], parts:[], novaT:0, orbitA:0, fireT:0.6, hurtT:0, fires:[],
-     bossCount:0, bossSpawnAt:0, paused:false, dnums:[], nextBossAt:150, over:false, choosing:false, revived:false, texts:[], aimA:0, walkT:0, defs:(SAVE.defense[selLevel]||[]).map(d=>({id:d.id,x:d.x,y:d.y,cd:0,ang:0})), runDmg:1, airDone:rushOn, refreshed:false, refreshN:0, airUsed:0};
+     bossCount:0, bossSpawnAt:0, paused:false, dnums:[], nextBossAt:150, over:false, choosing:false, revived:false, texts:[], aimA:0, walkT:0, defs:(SAVE.defense[selLevel]||[]).map(d=>({id:d.id,x:d.x,y:d.y,cd:0,ang:0})), runDmg:1, airDone:rushOn, refreshed:false, refreshN:0, airUsed:0, airBuyN:0, airBought:{}};
   S.decor=(()=>{ const a=[]; for(let i=0;i<64;i++){ const k=Math.random();
     a.push({t:k<0.5?'grass':k<0.75?'stone':k<0.9?'crack':'flower', x:rand(20,WW-20), y:rand(20,WH-20), s:rand(0.7,1.3), rot:rand(0,6.28), ph:rand(0,6)}); } return a; })();
      ov.classList.add('hidden'); ov.classList.remove('menu'); ch.innerHTML=''; pauseBtn.classList.remove('hidden'); dashBtn.classList.remove('hidden');
@@ -578,7 +600,7 @@ function charSkill(){ // 角色主动技能：勇士=冲刺 学者=专注 商人
   if(c==='scholar'){ S.uberT=6; S.skillCd=15; S.texts.push({txt:'📖 专注！6秒必定暴击！',life:1.5}); AudioSys.sfx('lvl'); }
   else if(c==='merchant'){ const max=1+(S.keys.mer2||0); // 本局随时可放，次数=1+专属卡
     if((S.airUsed||0)>=max){ S.texts.push({txt:'✈️ 本局召唤次数已用完',life:1.2}); return; }
-    S.airUsed=(S.airUsed||0)+1; openAirshop(); } // Boss不受清扫影响, 也不会被消灭
+    S.airUsed=(S.airUsed||0)+1; S.airBuyN=0; openAirshop(); } // 每次主动召唤重置限购 // Boss不受清扫影响, 也不会被消灭
   else if(c==='engineer'){ const two=(S.keys.eng2||0)>0;
     S.defs.push({id:'turret',x:S.px,y:S.py,cd:0,ang:0,temp:true,life:15});
     if(two) S.defs.push({id:'turret',x:S.px+28,y:S.py+18,cd:0,ang:0,temp:true,life:15}); // 专属：每次两个
@@ -659,7 +681,8 @@ function gainXP(v){
 function levelUp(){
   AudioSys.sfx('lvl');
   const wsel=SAVE.weapon||'gun';
-  let avail=UPGRADES.filter(u=>S.keys[u.id]<u.max && (!u.w||u.w===wsel) && (!u.def||S.defs.some(d=>d.id===u.def)) && ((u.id!=='tdmg'&&u.id!=='trate') || S.defs.some(d=>d.id==='turret')));
+  let avail=UPGRADES.filter(u=>S.keys[u.id]<u.max && !u.ch && (!u.w||u.w===wsel) && (!u.def||S.defs.some(d=>d.id===u.def)) && ((u.id!=='tdmg'&&u.id!=='trate') || S.defs.some(d=>d.id==='turret')));
+  // 角色专属卡只通过下方 charEx 注入（仅限当前角色），绝不进普通卡池
   function grantBown(){ // 学者「博闻」：一次性随机获得2张（不三选一），带获得动画（期间游戏暂停）
     const pool=avail.filter(u=>!u.ch).slice(); const got=[];
     for(let i=0;i<2&&pool.length;i++){ const u=pool.splice(Math.random()*pool.length|0,1)[0];
@@ -676,9 +699,10 @@ function levelUp(){
     ch.appendChild(kb);
     ov.classList.remove('hidden'); ov.classList.remove('menu');
   }
-  if(SAVE.char==='engineer'){ const t1=avail.find(u=>u.id==='tdmg'), t2=avail.find(u=>u.id==='trate'); if(t1)avail.push(t1); if(t2)avail.push(t2); } // 工程师：机枪卡牌概率增高
+  if(SAVE.char==='engineer'){ const dup=avail.filter(u=>u.id==='tdmg'||u.id==='trate'); avail=avail.concat(dup); } // 工程师：机枪卡牌概率增高(副本引用, 防止同一张卡重复出现)
   const picks=[];
   while(picks.length<3&&avail.length) picks.push(avail.splice(Math.random()*avail.length|0,1)[0]);
+  const uniq=[...new Set(picks)]; picks.length=0; picks.push(...uniq); // 工程师复制引用可能重复，去重防同一张卡出现两次
   // 专属卡保底：连续3次升级没出本武器专属卡 → 本次必补一张
   const exclAvail=UPGRADES.filter(u=>u.w===wsel && S.keys[u.id]<u.max);
   if(!picks.some(u=>u.w) && exclAvail.length && (S.exclDry||0)>=2){
@@ -691,6 +715,7 @@ function levelUp(){
   S.choosing=true;
   ch.innerHTML='';
   const p=document.createElement('p'); p.innerHTML='<b>⬆️ 升级！选择一项天赋</b>'; ch.appendChild(p);
+  const pw=document.createElement('div'); pw.className='pickwrap'; // 三选一固定布局：等宽三张，窄屏纵向
   for(const u of picks){
     const c=document.createElement('div'); c.className='card'+(u.ch?' rc':u.def?' rd':u.w?' rw':'');
     c.innerHTML=`<div class="ic">${u.ic}</div><div class="nm">${u.nm}</div><div class="ds">${u.ds}</div><div class="lv">Lv ${S.keys[u.id]} → ${S.keys[u.id]+1}</div>`;
@@ -702,8 +727,9 @@ function levelUp(){
       ov.classList.add('hidden');
       loop();
     };
-    ch.appendChild(c);
+    pw.appendChild(c);
   }
+  ch.appendChild(pw); // 三选一容器
   ovT.textContent='LEVEL UP!';
   if((S.refreshN||0)<3){ // 金币刷新卡牌：10金币一次，每局限3次
     const rb=document.createElement('button');
@@ -1123,7 +1149,7 @@ function update(dt){
   }
   if((S.t>=S.nextBossAt||S.test)&&S.bossCount===0){
     if(S.test||S.airDone) spawnBoss();
-    else openAirshop();
+    else { S.airBuyN=0; S.airBought={}; openAirshop(); } // 自动到达的商店：重置限购（购买后重建商店不清零）
   }
   // Boss 超时 3 分钟离开
   if(S.bossCount>0 && S.t-S.bossSpawnAt>=180){
@@ -1145,7 +1171,7 @@ function update(dt){
   if(SAVE.daily && Math.floor(S.t)>SAVE.daily.secs){ SAVE.daily.secs=Math.floor(S.t); persist(); }
 }
 function openAirshop(){
-  S.paused=true; S.airDone=true; S.airBuyN=0; // 每次商店重置购买计数（限购3个）
+  S.paused=true; S.airDone=true; // airBuyN 由打开商店的调用方重置（购买后重建商店不清零）
   // 飞行器清扫主角身边一小圈怪物（Boss 不受影响；范围已缩小）
   let cleared=0;
   for(const e of S.enemies){ if(e.type!=='boss'&&!e.dead&&dist(e,S)<90){ e.dead=true; cleared++; } }
@@ -1160,13 +1186,13 @@ function openAirshop(){
   for(const it of DEF_ITEMS){
     const c=document.createElement('div'); c.className='card rd';
     c.innerHTML='<div class="ic">'+it.ic+'</div><div class="nm">'+it.nm+'</div><div class="ds">'+it.ds+'</div><div class="lv">💰 '+it.cost+' 购买</div>';
-    const itemCap=()=>S.defs.filter(d=>d.id===it.id&&!d.temp).length>=2; // 每个道具本关最多买2次（不与战前布防共享）
+    const itemCap=()=>((S.airBought||{})[it.id]||0)>=2; // 每个道具本局最多从商店买2次（只计商店购买，不含战前布防）
     if(total()<it.cost){ c.style.opacity=.5;
       c.onclick=()=>{ ovT.textContent='⚠️ 金币不足（需要 '+it.cost+'）'; setTimeout(()=>{ovT.textContent='🚁 空中商店';},900); };
     } else if(itemCap()){ c.style.opacity=.5;
       c.onclick=()=>{ ovT.textContent='⚠️ 每个道具最多购买2次'; setTimeout(()=>{ovT.textContent='🚁 空中商店';},1100); };
-    } else c.onclick=()=>{ if(total()<it.cost||itemCap())return;
-      spend(it.cost);
+    } else c.onclick=()=>{ if((S.airBuyN||0)>=3){ ovT.textContent='⚠️ 本次空运最多购买 3 件'; setTimeout(()=>{ovT.textContent='🚁 空中商店';},1100); return; } if(total()<it.cost||itemCap())return;
+      spend(it.cost); S.airBuyN=(S.airBuyN||0)+1; S.airBought=S.airBought||{}; S.airBought[it.id]=(S.airBought[it.id]||0)+1; // 限购计数（按道具）
       const a2=rand(0,Math.PI*2);
       S.defs.push({id:it.id,x:Math.max(40,Math.min(WW-40,S.px+Math.cos(a2)*80)),y:Math.max(40,Math.min(WH-40,S.py+Math.sin(a2)*80)),cd:0,ang:0});
       openAirshop(); };
@@ -1183,7 +1209,7 @@ function openAirshop(){
   b2.onclick=()=>{ if(total()<20||S.hp>=S.maxhp)return; spend(20); S.hp=S.maxhp; openAirshop(); };
   ch.appendChild(b2);
   const go=document.createElement('button'); go.textContent='🚀 起飞返回战场';
-  go.onclick=()=>{ S.paused=false; ov.classList.add('hidden'); ov.classList.remove('menu'); };
+  go.onclick=()=>{ S.paused=false; S.airBuyN=0; ov.classList.add('hidden'); ov.classList.remove('menu'); }; // 起飞=本次空运结束, 重置限购
   ch.appendChild(go);
   ov.classList.remove('hidden');
 }
@@ -1617,7 +1643,7 @@ for(const g of S.gems){
     }
   }
   ctx.font='bold 11px monospace'; ctx.textAlign='left';
-  if(S.dbg){ ctx.fillStyle='#7fff9f'; const d=S.dbg; ctx.fillText('V42 \u00b7 FPS '+d.fps+' \u602a'+d.n+' \u5f39'+d.b+' \u654c\u5f39'+d.eb+' \u5f39\u8ba1'+d.bt, 8, H-8); }
+  if(false&&S.dbg){ ctx.fillStyle='#7fff9f'; const d=S.dbg; ctx.fillText('V46 \u00b7 FPS '+d.fps+' \u602a'+d.n+' \u5f39'+d.b+' \u654c\u5f39'+d.eb+' \u5f39\u8ba1'+d.bt, 8, H-8); } // 调试信息：正式版关闭
   if(S.redT>0){
     const a2=S.redT/0.2*0.45;
     const g2=ctx.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*0.75);
@@ -1720,7 +1746,14 @@ const PAGES={
     title:'选择关卡',
     text:()=>'金币：<b>'+SAVE.coins+'</b> · 难度逐关提升 · 点选关卡后先布防',
     nav:{shop:'🛒 商店', play:'🛠 布防', playGo:'defend'},
-    render(){ pickRows(); renderLevelList(); rushEntry(); }
+    render(){ if(SAVE.tut>=1&&SAVE.tut<=3) pickRows(); // 教程期保留选角引导；平时选角走「🎭 角色」页
+      renderLevelList(); rushEntry(); }
+  },
+  roster:{
+    title:'🎭 角色与武器',
+    text:()=>'点角色或武器查看详情并确定选择',
+    nav:{shop:'🛒 商店', play:'▶ 开始战斗', playGo:'select'},
+    render(){ renderRoster(); }
   },
   defend:{
     title:()=>'🛠 战前布防 · 第'+selLevel+'关',
@@ -1758,7 +1791,10 @@ function showPage(name){
   ov.classList.add('menu'); ov.classList.remove('hidden');
   nav.classList.remove('hidden');
   navShop.textContent=P.nav.shop;
+  navRoster.onclick=()=>showPage(name==='roster'?'select':'roster'); // 🎭 角色/武器选择页
+  if(dtBack){ ov.removeEventListener('click',dtBack); dtBack=null; } // 离开详情页时清除空白退出监听
   navReward.textContent=(page==='reward')?'🏠 主页':'🎁 奖励';
+  navRoster.textContent=(page==='roster')?'🏠 主页':'🎭 角色';
   navPlay.textContent=typeof P.nav.play==='function'?P.nav.play():P.nav.play;
   navPlay.disabled=false;
   navShop.onclick=()=>showPage(name==='shop'?'home':'shop');
@@ -1895,16 +1931,49 @@ function showHomeLevels(){
   ch.appendChild(list);
 }
 const CHAR_INFO={
- warrior:{t:'⚔️ 勇士', d:'主动：冲刺（CD 5秒，冲刺中无敌0.32秒）<br>被动：无（各项均衡）'},
- scholar:{t:'📖 学者', d:'主动：专注——6秒内所有攻击必定暴击（CD 15秒）<br>被动：经验获取 +30%；初始速度与攻击 -10%'},
- merchant:{t:'💰 商人', d:'主动：召唤空中商店（CD 120秒）<br>被动：金币爆率 45%→65%；最大生命 -2'},
- engineer:{t:'🔧 工程师', d:'主动：脚下临时炮台（伤害1×、攻速2倍、存在15秒，CD 45秒）<br>被动：布防炮台伤害+45%攻速+30%；机枪卡牌出现率翻倍；自身伤害 -15%'}
+ warrior:{t:'⚔️ 勇士', d:'主动：冲刺（CD 5秒，冲刺中无敌0.32秒）<br>被动：无（各项均衡）<br>专属卡：🌪️斗士——冲刺更快且全程无敌，冷却+3秒（12%概率出现）'},
+ scholar:{t:'📖 学者', d:'主动：专注——6秒内所有攻击必定暴击（CD 15秒）<br>被动：经验获取 +30%；初始速度与攻击 -10%<br>专属卡：📚博闻——抽到即随机直接获得2张卡牌'},
+ merchant:{t:'💰 商人', d:'主动：召唤空中商店（本局1次，Boss战也可用且不会伤到Boss）<br>被动：金币爆率 45%→65%；最大生命 -2<br>专属卡：✈️多次空运——本局可多召唤1次商店'},
+ engineer:{t:'🔧 工程师', d:'主动：脚下临时炮台（伤害1×、攻速2倍、存在15秒，CD 45秒）<br>被动：布防炮台伤害+45%攻速+30%；机枪卡牌出现率翻倍；自身伤害 -15%<br>专属卡：🔩双子炮台——每次召唤2个临时炮台'}
 };
 const WEAPON_INFO={
  gun:{t:'🔫 手枪', d:'均衡：攻速1×、伤害1×、3发一排接力齐射<br>专属卡：🔱多重弹 🎯穿透 🧨爆破弹'},
  rocket:{t:'🚀 火箭筒', d:'伤害2.2×、攻速0.5×，命中爆炸溅射（0.8×伤害）<br>专属卡：🚀爆炸范围(max5，+75%) 🔥烈焰残留(max5)'},
  blade:{t:'🗡️ 砍刀', d:'攻速1.6×、伤害1×、90°扇形群伤（满级横扫覆盖75%圆）<br>专属卡：🗡️增加横扫(max5) 💠碎片溅射(max5，身后125°、0.8×)'}
 };
+function renderRoster(){ // 🎭 角色与武器选择页：整行列表（高=屏高1/6），点行进详情
+  const wrap=document.createElement('div'); wrap.style.cssText='width:100%; max-width:560px; display:flex; flex-direction:column; gap:10px; align-items:stretch;';
+  const mk=(label,items,key)=>{
+    const lab=document.createElement('p'); lab.innerHTML='<b style="color:#ffd76a">'+label+'</b>';
+    lab.style.cssText='margin:10px 0 0; font-size:13px; letter-spacing:2px; text-align:left; width:100%;'; wrap.appendChild(lab);
+    items.forEach(it=>{
+      const r=document.createElement('div'); r.className='rosterRow'+(SAVE[key]===it.id?' sel':'');
+      r.innerHTML='<div class="thumb">'+it.ic+'</div><div class="rnm">'+it.nm+'</div>'+(SAVE[key]===it.id?'<div class="cur">当前使用 ✅</div>':'');
+      r.onclick=()=>showRosterDetail(key,it);
+      wrap.appendChild(r); });
+  };
+  mk('👤 选择角色',[{id:'warrior',nm:'勇士',ic:'⚔️'},{id:'scholar',nm:'学者',ic:'📖'},{id:'merchant',nm:'商人',ic:'💰'},{id:'engineer',nm:'工程师',ic:'🔧'}],'char');
+  mk('🔫 选择武器',[{id:'gun',nm:'手枪',ic:'🔫'},{id:'rocket',nm:'火箭筒',ic:'🚀'},{id:'blade',nm:'砍刀',ic:'🗡️'}],'weapon');
+  ch.appendChild(wrap);
+}
+let rosterGen=0; // 详情页监听世代号：防迟挂监听泄漏到其他页面
+function showRosterDetail(key,it){ // 详情页：大图+完整介绍+确定按钮；点空白处退出且不选择
+  const myGen=++rosterGen;
+  const I=(key==='char'?CHAR_INFO:WEAPON_INFO)[it.id];
+  ch.innerHTML='';
+  const box=document.createElement('div'); box.id='dtBox';
+  box.innerHTML='<div class="ic">'+it.ic+'</div><div class="nm">'+I.t+'</div><div class="ds">'+I.d+'</div>';
+  const ok=document.createElement('button');
+  ok.textContent='✅ 确定'+(SAVE[key]===it.id?'（当前使用中）':'');
+  ok.style.cssText='margin-top:14px; width:100%;';
+  ok.onclick=(e)=>{ if(e&&e.stopPropagation) e.stopPropagation(); SAVE[key]=it.id; persist(); ovT.textContent='✅ 已选择：'+it.nm; showPage('roster'); };
+  box.appendChild(ok);
+  ch.appendChild(box);
+  const back=(e)=>{ if(myGen!==rosterGen) return; // 已离开本详情页（世代号失效），监听作废
+    if(e.target.closest&&e.target.closest('#dtBox')) return; // 点详情卡片/按钮内不退出
+    rosterGen++; ov.removeEventListener('click',back); dtBack=null; showPage('roster'); };
+  setTimeout(()=>{ if(myGen!==rosterGen) return; ov.addEventListener('click',back); dtBack=back; },0); // 延迟挂载：避免本次点击冒泡立刻触发退出
+}
 function pickRows(){ // 选关页顶部：角色 / 武器选择（点一下看详情，再点同一下选择）
   const wrap=document.createElement('div'); wrap.id='pickrows';
   let detail=document.createElement('p');
